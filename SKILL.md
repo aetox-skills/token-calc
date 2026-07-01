@@ -1,34 +1,42 @@
 ---
 name: token-calc
-description: Token Auditor — measure system prompt, cache efficiency, cumulative projections, and optimization recommendations. Self-inspect any AI coding tool.
+description: Token Auditor — inspect system prompt, first call shock warning, cache breakdown, cumulative projections, threshold guard. Prevents surprise AI costs.
 ---
 
 # Token Auditor
 
-**AI can't measure itself objectively.** This script measures from outside — no bias, no reading limitations, consistent every time.
+**AI can't measure itself.** This script exists because system prompt silently eats tokens before you type anything.
+
+## Core Value
+
+- **FIRST CALL SHOCK** — "เปิดมา 60K หายไปแล้ว" (visual warning)
+- **Risk level** — GREEN / CAUTION / HIGH based on input size
+- **Threshold guard** — `-Threshold 50000` exits with error if exceeded
+- **Breakdown** — what's eating your prompt (MCP? skills? files?)
+- **Projections** — per call → session → day
 
 ## CLI
 
 ```powershell
-# See what your system prompt is made of + what to do about it
-.\token-calc.ps1 -Measure -Calls 100 -CallsPerSession 20 -SessionsPerDay 5
+# See the shock + risk + breakdown
+.\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -OutputTokens 4000 -Calls 100 -CallsPerSession 20 -SessionsPerDay 5
 
-# Save baseline for tracking changes
-.\token-calc.ps1 -Measure -Save .\baseline.json
+# Guard mode: fail if system prompt > 50K
+.\token-calc.ps1 -Measure -Threshold 50000
 
-# Check what changed since last time
-.\token-calc.ps1 -Measure -Diff .\baseline.json
+# Auto-measure your current OpenCode setup
+.\token-calc.ps1 -Measure -Calls 100
 
-# Manual
-.\token-calc.ps1 -InputTokens 50000 -CachedInputTokens 35000 -OutputTokens 2000
+# Track changes
+.\token-calc.ps1 -Measure -Save baseline.json
+.\token-calc.ps1 -Measure -Diff baseline.json
 ```
 
-## What AI gets from this
+## Why use this (not AI itself)
 
-| Can't do itself | Gets from script |
+| AI doing it | Script does it |
 |:--|:--|
-| Objectively measure own prompt size | Accurate breakdown per component |
-| Know cache hit/miss ratio | Heuristic based on stable vs fresh content |
-| See cumulative impact across time | Per call → session → day projections |
-| Track changes over time | -Save / -Diff for before/after |
-| Know what to optimize | Built-in recommendations |
+| Reads files one by one, estimates crudely | One-shot, consistent heuristic |
+| Can't see its own bias | External measurement |
+| No "warning" mode | Risk level + threshold guard |
+| Forgets previous measurements | -Save / -Diff tracking |
