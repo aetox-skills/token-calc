@@ -62,6 +62,9 @@ param(
     [long]$ContextWindow = 200000
 )
 
+# ─── Force UTF-8 output ───────────────────────────────────
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
+
 # ─── Measure system prompt ────────────────────────────────
 function Measure-SystemPrompt {
     $files = @(
@@ -117,7 +120,7 @@ if ($Diff -and (Test-Path $Diff)) { try { $previous = Get-Content -Raw $Diff | C
 # ─── Auto-measure ─────────────────────────────────────────
 $measureResult = $null
 if ($Measure) {
-    Write-Host "`n📏 Measuring system prompt..." -ForegroundColor Cyan
+    Write-Host "`n📏 กำลังวัด system prompt..." -ForegroundColor Cyan
     $measureResult = Measure-SystemPrompt
     $InputTokens = $measureResult.total
     if ($CachedInputTokens -eq 0) { $CachedInputTokens = [long][math]::Round($measureResult.total * 0.3) }
@@ -125,23 +128,23 @@ if ($Measure) {
     $measureResult.details | Sort-Object Tokens -Descending | ForEach-Object {
         Write-Host ("  {0,-40} {1,8:N0}" -f $_.Component, $_.Tokens)
     }
-    Write-Host ("  " + "TOTAL system prompt".PadRight(44) + "$("{0:N0}" -f $measureResult.total) tok") -ForegroundColor Cyan
+    Write-Host ("  " + "รวม system prompt".PadRight(44) + "$("{0:N0}" -f $measureResult.total) tok") -ForegroundColor Cyan
 
     if ($Save) {
         $measureResult.details | Select-Object Component, Tokens | ConvertTo-Json | Set-Content $Save
-        Write-Host "`n💾 Baseline saved → $Save" -ForegroundColor DarkGray
+        Write-Host "`n💾 บันทึก baseline → $Save" -ForegroundColor DarkGray
     }
 }
 
 # ─── Validate ─────────────────────────────────────────────
 if ($InputTokens -le 0 -and $OutputTokens -le 0) {
-    Write-Error "Need at least some tokens. Use -Measure or -InputTokens."
+    Write-Error "กรุณาใส่ token อย่างน้อย ใช้ -Measure หรือ -InputTokens"
     exit 1
 }
 
 # ─── Threshold guard ──────────────────────────────────────
 if ($Threshold -gt 0 -and $InputTokens -gt $Threshold) {
-    Write-Host "`n🚨 THRESHOLD EXCEEDED!" -ForegroundColor Red -BackgroundColor Black
+    Write-Host "`n🚨 เกิน Threshold ที่กำหนด!" -ForegroundColor Red -BackgroundColor Black
     Write-Host "  Input: $("{0:N0}" -f $InputTokens) tok > Limit: $("{0:N0}" -f $Threshold) tok" -ForegroundColor Red
     exit 2
 }
@@ -161,27 +164,27 @@ $perSession = $totalSentPerCall * $CallsPerSession
 $perDay     = $perSession * $SessionsPerDay
 
 # ─── Risk level ───────────────────────────────────────────
-$riskColor = 'Green'; $riskLabel = 'LOW'
-if ($InputTokens -gt 20000) { $riskColor = 'Yellow'; $riskLabel = 'CAUTION' }
-if ($InputTokens -gt 50000) { $riskColor = 'Red';   $riskLabel = 'HIGH' }
+$riskColor = 'Green'; $riskLabel = 'ต่ำ'
+if ($InputTokens -gt 20000) { $riskColor = 'Yellow'; $riskLabel = 'ปานกลาง' }
+if ($InputTokens -gt 50000) { $riskColor = 'Red';   $riskLabel = 'สูง' }
 
 # ─── Recommendations ──────────────────────────────────────
 $recs = @()
 if ($Measure -and $measureResult) {
     $mcpTotal = ($measureResult.details | Where-Object { $_.Component -like 'MCP*' } | Measure-Object Tokens -Sum).Sum
     $mcpPct = if ($measureResult.total -gt 0) { $mcpTotal / $measureResult.total * 100 } else { 0 }
-    if ($mcpPct -gt 50) { $recs += "MCP tools dominate ($("{0:N0}" -f $mcpPct)%). Merge or disable unused servers." }
+    if ($mcpPct -gt 50) { $recs += "MCP tools กินพื้นที่ $("{0:N0}" -f $mcpPct)% ของ system prompt. รวม server หรือปิดตัวที่ไม่ใช้ออกจาก config." }
     $largest = $measureResult.details | Sort-Object Tokens -Descending | Select-Object -First 3
-    $recs += "Top 3 optimization targets: $($largest[0].Component) ($("{0:N0}" -f $largest[0].Tokens) tok), $($largest[1].Component) ($("{0:N0}" -f $largest[1].Tokens) tok), $($largest[2].Component) ($("{0:N0}" -f $largest[2].Tokens) tok)"
+    $recs += "3 อันดับแรกที่ควร optimize: $($largest[0].Component) ($("{0:N0}" -f $largest[0].Tokens) tok), $($largest[1].Component) ($("{0:N0}" -f $largest[1].Tokens) tok), $($largest[2].Component) ($("{0:N0}" -f $largest[2].Tokens) tok)"
 }
 if ($cacheHitRate -lt 0.4 -and $InputTokens -gt 0) {
-    $recs += "Cache too low ($("{0:P1}" -f $cacheHitRate)). Structure prompt for reuse."
+    $recs += "Cache reuse ต่ำเกินไป ($("{0:P1}" -f $cacheHitRate)). จัดโครงสร้าง content ให้ stable ขึ้นเพื่อเพิ่ม cache hit."
 }
 if ($InputTokens -gt 50000) {
-    $recs += "CRITICAL: Input $("{0:N0}" -f $InputTokens) tok eats $("{0:N0}" -f $ctxPct)% of $("{0:N0}" -f $ContextWindow) context window."
+    $recs += "วิกฤติ: Input $("{0:N0}" -f $InputTokens) tok กินพื้นที่ $("{0:N0}" -f $ctxPct)% ของ $("{0:N0}" -f $ContextWindow) context window."
 }
-if ($OutputTokens -eq 0) { $recs += "Add -OutputTokens for complete per-call picture (model response)." }
-if ($Threshold -eq 0) { $recs += "Set -Threshold <tok> to guard against surprises in CI/scripts." }
+if ($OutputTokens -eq 0) { $recs += "ใส่ -OutputTokens เพื่อดูภาพรวม完整 (รวม output ของโมเดล)." }
+if ($Threshold -eq 0) { $recs += "ใส่ -Threshold <tok> เพื่อป้องกันใน CI/script." }
 
 # ─── Diff ─────────────────────────────────────────────────
 $diffs = @()
@@ -190,7 +193,7 @@ if ($previous -and $measureResult) {
     $diffTok = $measureResult.total - $prevTotal
     $pct = if ($prevTotal -gt 0) { [math]::Round($diffTok / $prevTotal * 100, 1) } else { 0 }
     $arrow = if ($diffTok -ge 0) { "↑" } else { "↓" }
-    $diffs += "Overall: $arrow $("{0:N0}" -f [math]::Abs($diffTok)) tok ($pct%)"
+    $diffs += "โดยรวม: $arrow $("{0:N0}" -f [math]::Abs($diffTok)) tok ($pct%)"
     $compMap = @{}; $previous | ForEach-Object { $compMap[$_.Component] = $_.Tokens }
     foreach ($d in $measureResult.details) {
         $old = if ($compMap.ContainsKey($d.Component)) { $compMap[$d.Component] } else { 0 }
@@ -202,70 +205,69 @@ if ($previous -and $measureResult) {
 }
 
 # ══════════════════════════════════════════════════════════
-# DISPLAY
+# DISPLAY (ภาษาไทย)
 # ══════════════════════════════════════════════════════════
 function Line { Write-Host ("─" * 60) -ForegroundColor DarkGray }
 
 # ─── HEADER WITH RISK ─────────────────────────────────────
 Line
-Write-Host "  TOKEN AUDITOR  ●  RISK: $riskLabel" -ForegroundColor $riskColor
+Write-Host "  TOKEN AUDITOR  ●  ความเสี่ยง: $riskLabel" -ForegroundColor $riskColor
 Line
 
 # ─── FIRST CALL SHOCK ─────────────────────────────────────
 if ($Calls -gt 1) {
     Write-Host "`n⚠️  FIRST CALL SHOCK" -ForegroundColor $riskColor
-    Write-Host "  Opening this session costs you $("{0:N0}" -f $firstCallNew) tok before you type." -ForegroundColor $riskColor
-    Write-Host "  That's $("{0:N0}" -f $ctxPct)% of your $("{0:N0}" -f $ContextWindow) context window." -ForegroundColor $riskColor
-    Write-Host "  Each subsequent call costs only $("{0:N0}" -f $eachRepeatedNew) tok (cache kicks in)."
-    Write-Host "  First call = $shockMultiplier× the cost of a repeated call." -ForegroundColor $riskColor
+    Write-Host "  แค่เปิด session นี้ขึ้นมา คุณเสีย $("{0:N0}" -f $firstCallNew) tok ไปแล้ว โดยยังไม่ได้พิมพ์อะไรเลย" -ForegroundColor $riskColor
+    Write-Host "  คิดเป็น $("{0:N0}" -f $ctxPct)% ของ $("{0:N0}" -f $ContextWindow) context window" -ForegroundColor $riskColor
+    Write-Host "  ทุก call ต่อจากนี้เสียแค่ $("{0:N0}" -f $eachRepeatedNew) tok (cache เริ่มทำงาน)"
+    Write-Host "  First call = $shockMultiplier× ของ repeated call" -ForegroundColor $riskColor
 }
 
 # ─── BREAKDOWN ────────────────────────────────────────────
-Write-Host "`n📊 TOKEN BREAKDOWN (per call)" -ForegroundColor Yellow
-Write-Host ("  {0,-30} {1,12}" -f "Input Sent", ("{0:N0}" -f $InputTokens))
-Write-Host ("  {0,-30} {1,12}" -f "  ↳ Cache Hit (reused)", ("{0:N0}" -f $CachedInputTokens))
-Write-Host ("  {0,-30} {1,12}" -f "  ↳ Cache Miss (fresh)", ("{0:N0}" -f $cacheMissTokens))
+Write-Host "`n📊 สัดส่วน TOKEN (ต่อ call)" -ForegroundColor Yellow
+Write-Host ("  {0,-27} {1,12}" -f "Input ที่ส่งไป", ("{0:N0}" -f $InputTokens))
+Write-Host ("  {0,-27} {1,12}" -f "  ↳ Cache Hit ( reuse)", ("{0:N0}" -f $CachedInputTokens))
+Write-Host ("  {0,-27} {1,12}" -f "  ↳ Cache Miss (ใหม่)", ("{0:N0}" -f $cacheMissTokens))
 if ($OutputTokens -gt 0) {
-    Write-Host ("  {0,-30} {1,12}" -f "Output Received", ("{0:N0}" -f $OutputTokens))
+    Write-Host ("  {0,-27} {1,12}" -f "Output ที่ได้รับ", ("{0:N0}" -f $OutputTokens))
 }
-Write-Host ("  {0,-30} {1,12}" -f "Total Sent/Received", ("{0:N0}" -f $totalSentPerCall)) -ForegroundColor Cyan
-Write-Host ("  {0,-30} {1,12}" -f "Context Window Used", "$("{0:N0}" -f $ctxPct)%")
+Write-Host ("  {0,-27} {1,12}" -f "รวม ส่ง/รับ", ("{0:N0}" -f $totalSentPerCall)) -ForegroundColor Cyan
+Write-Host ("  {0,-27} {1,12}" -f "ใช้พื้นที่ Context Window", "$("{0:N0}" -f $ctxPct)%")
 
 # ─── CACHE ────────────────────────────────────────────────
-Write-Host "`n📈 CACHE EFFICIENCY" -ForegroundColor Yellow
+Write-Host "`n📈 ประสิทธิภาพ CACHE" -ForegroundColor Yellow
 Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Hit Rate", $cacheHitRate)
 Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Miss Rate", $cacheMissRate)
-Write-Host ("  {0,-33} {1,12:N0}" -f "Reused per Call", $CachedInputTokens)
+Write-Host ("  {0,-33} {1,12:N0}" -f "ประหยัดได้ต่อ call", $CachedInputTokens)
 
 # ─── PROCESSING PROJECTOR ─────────────────────────────────
-# Show multiple call milestones so user can plan ahead
 $milestones = @(1, 10, 20, 50, 100) | Where-Object { $_ -le $Calls }
 if ($milestones.Count -gt 1) {
-    Write-Host "`n🔄 PROCESSING PROJECTOR" -ForegroundColor Yellow
-    Write-Host "  What you'll actually pay to process at each stage:" -ForegroundColor DarkGray
-    Write-Host ("  {0,8}  {1,14}  {2,14}" -f "Calls", "Total Sent", "Processed (pay)")
-    Write-Host ("  {0,8}  {1,14}  {2,14}" -f ("─" * 5), ("─" * 12), ("─" * 14))
+    Write-Host "`n🔄 PROJECTION การประมวลผล" -ForegroundColor Yellow
+    Write-Host "  คุณจะจ่ายจริง (process) เท่าไหร่ในแต่ละช่วง:" -ForegroundColor DarkGray
+    Write-Host ("  {0,8}  {1,15}  {2,16}" -f "Call ที่", "รวมที่ส่ง", "ที่ต้องจ่าย (process)")
+    Write-Host ("  {0,8}  {1,15}  {2,16}" -f ("─" * 5), ("─" * 12), ("─" * 14))
     foreach ($m in $milestones) {
         $msent = $totalSentPerCall * $m
         $mproc = $firstCallNew + ($eachRepeatedNew * ($m - 1))
         $mColor = if ($m -eq 1) { $riskColor } else { 'Gray' }
-        Write-Host ("  {0,6}  {1,14:N0}  {2,14:N0}" -f $m, $msent, $mproc) -ForegroundColor $mColor
+        Write-Host ("  {0,6}  {1,15:N0}  {2,16:N0}" -f $m, $msent, $mproc) -ForegroundColor $mColor
     }
-    Write-Host ("  Note: 'Processed (pay)' = first call full + repeated fresh-only (cache miss + output)") -ForegroundColor DarkGray
+    Write-Host ("  หมายเหตุ: 'ที่ต้องจ่าย' = first call เต็ม + call ซ้ำเฉพาะ cache miss + output") -ForegroundColor DarkGray
 }
 
 # ─── RECOMMENDATIONS ──────────────────────────────────────
 if ($recs.Count -gt 0) {
-    Write-Host "`n💡 RECOMMENDATIONS" -ForegroundColor Green
+    Write-Host "`n💡 คำแนะนำ" -ForegroundColor Green
     foreach ($r in $recs) { Write-Host "  • $r" }
 }
 
 # ─── DIFF ─────────────────────────────────────────────────
 if ($diffs.Count -gt 0) {
-    Write-Host "`n📉 DIFF vs BASELINE" -ForegroundColor Cyan
+    Write-Host "`n📉 ต่างจาก BASELINE" -ForegroundColor Cyan
     foreach ($d in $diffs) { Write-Host "  • $d" }
 }
 
 Line
-Write-Host "  Token counts are approximate. Use exact tokenizer for billing." -ForegroundColor DarkGray
+Write-Host "  ตัวเลข token เป็นค่าประมาณ ใช้ exact tokenizer เพื่อความแม่นยำ" -ForegroundColor DarkGray
 Write-Host
