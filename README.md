@@ -1,31 +1,28 @@
 # Token Auditor
 
-**Stop surprise AI costs.** Inspect your system prompt before it eats tokens.
+**Cost control for self-hosted API users.** See your processing burn rate before it burns you.
 
-## Key Features
-
-| Feature | What it does |
-|:--|:--|
-| **⚠️ First Call Shock** | Shows the 60K+ tokens gone before you type |
-| **🔴 Risk Level** | GREEN / CAUTION / HIGH based on input size |
-| **🚨 Threshold Guard** | `-Threshold 50000` exits with error code 2 if exceeded |
-| **📊 Breakdown** | MCP, skills, agents, files — what's eating your prompt |
-| **📈 Cache Analysis** | Hit/miss breakdown + cumulative projections |
-| **💾 Snapshot** | `-Save` baseline, `-Diff` changes over time |
-
-## Usage
+## Quick Start
 
 ```powershell
-# Full inspection + shock warning
+# Measure your system + project processing costs
 .\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -OutputTokens 4000 -Calls 100
-
-# Guard: fail in CI if prompt too big
-.\token-calc.ps1 -Measure -Threshold 50000
-
-# Track changes
-.\token-calc.ps1 -Measure -Save baseline.json
-.\token-calc.ps1 -Measure -Diff baseline.json
 ```
+
+## What you get
+
+- ⚠️ **First Call Shock** — what you pay before typing
+- 🔄 **Processing Projector** — table of 1, 10, 20, 50, 100 calls
+- 📊 **Cache Efficiency** — hit rate, miss rate, reused per call
+- 💡 **Recommendations** — what to optimize
+- 🚨 **Threshold Guard** — `-Threshold 50000` fails early
+
+## Use cases
+
+- **Know your burn rate**: "100 calls = 1.25M processed, not 6.4M sent"
+- **Plan before you build**: "Adding an MCP server costs me X tok/call"
+- **CI guard**: "Deploy fails if system prompt > 50K"
+- **Track drift**: "My prompt grew 10% this week"
 
 ## License
 

@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  Token Auditor — inspect system prompt, warn against surprise costs.
+  Token Auditor — cost control for self-hosted API users. Project your processing costs before they surprise you.
 
 .DESCRIPTION
-  One-shot inspection that shows what you're spending before you spend it.
-  Highlights the "first call shock" — the 60K+ tokens gone before you type anything.
-  Includes risk levels, context window %, and optional threshold guard.
+  Shows the "first call shock", then projects forward across call milestones
+  how many tokens you'll actually pay to process (cache miss + output).
+  Designed for anyone running their own API keys — know your burn rate before it burns.
 
 .PARAMETER InputTokens
   Total input tokens per call.
@@ -237,21 +237,22 @@ Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Hit Rate", $cacheHitRate)
 Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Miss Rate", $cacheMissRate)
 Write-Host ("  {0,-33} {1,12:N0}" -f "Reused per Call", $CachedInputTokens)
 
-# ─── CUMULATIVE ───────────────────────────────────────────
-if ($Calls -gt 1) {
-    Write-Host "`n🔄 CUMULATIVE ($Calls calls)" -ForegroundColor Yellow
-    Write-Host ("  {0,-35} {1,14:N0}" -f "Total Sent (all calls)", $rawCumulative) -ForegroundColor Cyan
-    Write-Host ("  {0,-35} {1,14:N0}" -f "Total Processed (fresh only)", $effectiveCumulative)
-    Write-Host ("  {0,-35} {1,14:N0}" -f "Cache Saved (not reprocessed)", ($CachedInputTokens * ($Calls - 1))) -ForegroundColor Green
-    Write-Host ("  {0,-35} {1,14:N0}" -f "First Call (fresh)", $firstCallNew)
-    Write-Host ("  {0,-35} {1,14:N0}" -f "Each Repeated (fresh only)", $eachRepeatedNew)
+# ─── PROCESSING PROJECTOR ─────────────────────────────────
+# Show multiple call milestones so user can plan ahead
+$milestones = @(1, 10, 20, 50, 100) | Where-Object { $_ -le $Calls }
+if ($milestones.Count -gt 1) {
+    Write-Host "`n🔄 PROCESSING PROJECTOR" -ForegroundColor Yellow
+    Write-Host "  What you'll actually pay to process at each stage:" -ForegroundColor DarkGray
+    Write-Host ("  {0,8}  {1,14}  {2,14}" -f "Calls", "Total Sent", "Processed (pay)")
+    Write-Host ("  {0,8}  {1,14}  {2,14}" -f ("─" * 5), ("─" * 12), ("─" * 14))
+    foreach ($m in $milestones) {
+        $msent = $totalSentPerCall * $m
+        $mproc = $firstCallNew + ($eachRepeatedNew * ($m - 1))
+        $mColor = if ($m -eq 1) { $riskColor } else { 'Gray' }
+        Write-Host ("  {0,6}  {1,14:N0}  {2,14:N0}" -f $m, $msent, $mproc) -ForegroundColor $mColor
+    }
+    Write-Host ("  Note: 'Processed (pay)' = first call full + repeated fresh-only (cache miss + output)") -ForegroundColor DarkGray
 }
-
-# ─── PROJECTIONS ──────────────────────────────────────────
-Write-Host "`n📅 PROJECTIONS (total sent)" -ForegroundColor Yellow
-Write-Host ("  {0,-35} {1,14:N0}" -f "Per Call", $totalSentPerCall)
-Write-Host ("  {0,-35} {1,14:N0}" -f "Per Session ($CallsPerSession calls)", $perSession)
-Write-Host ("  {0,-35} {1,14:N0}" -f "Per Day ($SessionsPerDay sessions)", $perDay)
 
 # ─── RECOMMENDATIONS ──────────────────────────────────────
 if ($recs.Count -gt 0) {
