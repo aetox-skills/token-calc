@@ -30,4 +30,4 @@ description: Token Auditor — measure system prompt, breakdown cache hit/miss, 
 | `-CachedInputTokens` | ส่วนที่ cache ได้ |
 | `-OutputTokens` | output tokens |
 | `-Measure` | auto-detect system prompt |
-| `-Calls`, `-CallsPerSession`, `-SessionsPerDay`, `-Days` | projection scale |
+| `-Calls`, `-CallsPerSession`, `-SessionsPerDay` | projection scale |

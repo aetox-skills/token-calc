@@ -46,8 +46,7 @@ param(
     [switch]$Measure,
     [long]$Calls = 1,
     [long]$CallsPerSession = 10,
-    [long]$SessionsPerDay = 3,
-    [long]$Days = 1
+    [long]$SessionsPerDay = 3
 )
 
 # ─── Measure system prompt ────────────────────────────────
@@ -156,11 +155,9 @@ $firstCallNew      = $totalSentPerCall                               # first cal
 $eachRepeatedNew   = $cacheMissTokens + $OutputTokens                # repeated calls process only fresh content
 $effectiveCumulative = $firstCallNew + ($eachRepeatedNew * ($Calls - 1))
 
-# ─── Session/day/month/year on raw total ──────────────────
+# ─── Session/day on raw total ─────────────────────────────
 $perSession    = $totalSentPerCall * $CallsPerSession
 $perDay        = $perSession * $SessionsPerDay
-$perMonth      = $perDay * 30
-$perYear       = $perDay * $Days
 
 # ─── Display ──────────────────────────────────────────────
 function Line { Write-Host ("─" * 60) -ForegroundColor DarkGray }
@@ -196,9 +193,7 @@ Write-Host "`n📅 PROJECTIONS (total sent)" -ForegroundColor Yellow
 Write-Host ("  {0,-33} {1,12:N0}" -f "Per Call", $totalSentPerCall)
 Write-Host ("  {0,-33} {1,12:N0}" -f "Per Session ($CallsPerSession calls)", $perSession)
 Write-Host ("  {0,-33} {1,12:N0}" -f "Per Day ($SessionsPerDay sessions)", $perDay)
-Write-Host ("  {0,-33} {1,12:N0}" -f "Per Month (30 days)", $perMonth)
-$yLabel = if ($Days -eq 365) { "Per Year (365 days)" } else { "Per $Days days" }
-Write-Host ("  {0,-33} {1,12:N0}" -f $yLabel, $perYear)
+
 
 Line
 Write-Host "  Token counts are approximate. Use exact tokenizer for billing." -ForegroundColor DarkGray
