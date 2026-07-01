@@ -59,58 +59,104 @@ param(
     [string]$Save = '',
     [string]$Diff = '',
     [long]$Threshold = 0,
-    [long]$ContextWindow = 200000
+    [long]$ContextWindow = 200000,
+    [string]$Platform = '',
+    [string]$Milestones = '1,10,20,50,100'
 )
 
 # ─── Force UTF-8 output ───────────────────────────────────
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 
-# ─── Measure system prompt ────────────────────────────────
+# ─── Measure system prompt (multi-platform) ───────────────
 function Measure-SystemPrompt {
-    $files = @(
-        'C:\Users\Gigabyte\CONTEXT.md',
-        'C:\Users\Gigabyte\PROFILE.md',
-        'C:\Users\Gigabyte\AGENTS.md',
-        'E:\MikeData\opencode_data\index.md'
-    )
-    $agentDir = 'C:\Users\Gigabyte\.config\opencode\agents'
-    $skillDir = 'C:\Users\Gigabyte\.config\opencode\skills'
-    $total = 0; $details = @()
+    param([string]$TargetPlatform = '')
+    $homeDir = $env:USERPROFILE
+    $result = @{ total = 0; details = @(); platforms = @{} }
 
-    foreach ($f in $files) {
-        if (Test-Path $f) {
-            $c = Get-Content -Raw $f
-            $thai = [regex]::Matches($c, '[\u0E00-\u0E7F]').Count
-            $chinese = [regex]::Matches($c, '[\u4E00-\u9FFF]').Count
-            $tok = [math]::Ceiling(($c.Length - $thai - $chinese)/4 + $thai/3 + $chinese/3)
-            $total += $tok; $details += [PSCustomObject]@{Component = $f.Split('\')[-1]; Tokens = $tok}
-        }
+    # Estimate file tokens
+    function Count-Tokens($text) {
+        $thai = [regex]::Matches($text, '[\u0E00-\u0E7F]').Count
+        $chinese = [regex]::Matches($text, '[\u4E00-\u9FFF]').Count
+        return [math]::Ceiling(($text.Length - $thai - $chinese)/4 + $thai/3 + $chinese/3)
     }
-    if (Test-Path $agentDir) {
-        foreach ($af in (Get-ChildItem "$agentDir\*.md")) {
-            $c = Get-Content -Raw $af.FullName
-            if ($c -match "description:\s*['""]?([^'""\n]+)") {
-                $tok = [math]::Ceiling($Matches[1].Length/4) + [math]::Ceiling($af.BaseName.Length/4)
-                $total += $tok; $details += [PSCustomObject]@{Component = "$($af.BaseName) (agent)"; Tokens = $tok}
+
+    $r = $result # alias for cleaner code below
+    # ── OpenCode ──────────────────────────────────────────
+    if (!$TargetPlatform -or $TargetPlatform -eq 'opencode') {
+        $ocFiles = @(
+            @{Path = "$homeDir\CONTEXT.md"; Name = 'CONTEXT.md'},
+            @{Path = "$homeDir\PROFILE.md"; Name = 'PROFILE.md'},
+            @{Path = "$homeDir\AGENTS.md"; Name = 'AGENTS.md'},
+            @{Path = "$homeDir\opencode_data\index.md"; Name = 'index.md'}
+        )
+        foreach ($f in $ocFiles) {
+            if (Test-Path $f.Path) { $tok = Count-Tokens (Get-Content -Raw $f.Path); $r.total += $tok; $r.details += [PSCustomObject]@{Component = $f.Name; Tokens = $tok; Platform = 'OpenCode'}; $r.platforms['OpenCode'] = $true }
+        }
+        $agentDir = "$homeDir\.config\opencode\agents"
+        if (Test-Path $agentDir) {
+            foreach ($af in (Get-ChildItem "$agentDir\*.md" -ErrorAction SilentlyContinue)) {
+                $c = Get-Content -Raw $af.FullName
+                if ($c -match "description:\s*['""]?([^'""\n]+)") {
+                    $tok = [math]::Ceiling($Matches[1].Length/4) + [math]::Ceiling($af.BaseName.Length/4)
+                    $r.total += $tok; $r.details += [PSCustomObject]@{Component = "$($af.BaseName) (agent)"; Tokens = $tok; Platform = 'OpenCode'}; $r.platforms['OpenCode'] = $true
+                }
             }
         }
-    }
-    if (Test-Path $skillDir) {
-        foreach ($sd in (Get-ChildItem $skillDir -Directory)) {
-            $sf = Join-Path $sd.FullName 'SKILL.md'
-            if (Test-Path $sf) {
-                $c = Get-Content -Raw $sf
-                if ($c -match "description:\s*['""]?([^'""\n]+)") {
-                    $tok = [math]::Ceiling($Matches[1].Length/4) + [math]::Ceiling($sd.Name.Length/4) + 30
-                    $total += $tok; $details += [PSCustomObject]@{Component = "$($sd.Name) (skill)"; Tokens = $tok}
+        $skillDir = "$homeDir\.config\opencode\skills"
+        if (Test-Path $skillDir) {
+            foreach ($sd in (Get-ChildItem $skillDir -Directory -ErrorAction SilentlyContinue)) {
+                $sf = Join-Path $sd.FullName 'SKILL.md'
+                if (Test-Path $sf) {
+                    $c = Get-Content -Raw $sf
+                    if ($c -match "description:\s*['""]?([^'""\n]+)") {
+                        $tok = [math]::Ceiling($Matches[1].Length/4) + [math]::Ceiling($sd.Name.Length/4) + 30
+                        $r.total += $tok; $r.details += [PSCustomObject]@{Component = "$($sd.Name) (skill)"; Tokens = $tok; Platform = 'OpenCode'}; $r.platforms['OpenCode'] = $true
+                    }
                 }
             }
         }
     }
-    $mcp = 4 * 3000; $ov = 2000; $total += $mcp + $ov
-    $details += [PSCustomObject]@{Component = "MCP tools x4"; Tokens = $mcp}
-    $details += [PSCustomObject]@{Component = 'OpenCode overhead'; Tokens = $ov}
-    return @{ total = $total; details = $details; timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') }
+
+    # ── ZCode ─────────────────────────────────────────────
+    if (!$TargetPlatform -or $TargetPlatform -eq 'zcode') {
+        $zAgentDir = "$homeDir\.zcode\agents"
+        if (Test-Path $zAgentDir) {
+            foreach ($af in (Get-ChildItem "$zAgentDir\*.md" -ErrorAction SilentlyContinue)) {
+                $c = Get-Content -Raw $af.FullName
+                if ($c -match "description:\s*['""]?([^'""\n]+)") {
+                    $tok = [math]::Ceiling($Matches[1].Length/4) + [math]::Ceiling($af.BaseName.Length/4)
+                    $r.total += $tok; $r.details += [PSCustomObject]@{Component = "$($af.BaseName) (agent)"; Tokens = $tok; Platform = 'ZCode'}; $r.platforms['ZCode'] = $true
+                }
+            }
+        }
+        $zSkillDir = "$homeDir\.zcode\skills"
+        if (Test-Path $zSkillDir) {
+            foreach ($sd in (Get-ChildItem $zSkillDir -Directory -ErrorAction SilentlyContinue)) {
+                $sf = Join-Path $sd.FullName 'SKILL.md'
+                if (Test-Path $sf) {
+                    $c = Get-Content -Raw $sf
+                    if ($c -match "description:\s*['""]?([^'""\n]+)") {
+                        $tok = [math]::Ceiling($Matches[1].Length/4) + [math]::Ceiling($sd.Name.Length/4) + 30
+                        $r.total += $tok; $r.details += [PSCustomObject]@{Component = "$($sd.Name) (skill)"; Tokens = $tok; Platform = 'ZCode'}; $r.platforms['ZCode'] = $true
+                    }
+                }
+            }
+        }
+    }
+
+    # ── Claude Code ───────────────────────────────────────
+    if (!$TargetPlatform -or $TargetPlatform -eq 'claude') {
+        $claudeFile = "$homeDir\.claude\instructions.md"
+        if (Test-Path $claudeFile) { $tok = Count-Tokens (Get-Content -Raw $claudeFile); $r.total += $tok; $r.details += [PSCustomObject]@{Component = 'instructions.md'; Tokens = $tok; Platform = 'Claude'}; $r.platforms['Claude'] = $true }
+    }
+
+    # ── Cross-platform estimates ──────────────────────────
+    $mcpTok = 4 * 3000
+    $r.total += $mcpTok; $r.details += [PSCustomObject]@{Component = "MCP tools x4"; Tokens = $mcpTok; Platform = 'common'}
+    $r.total += 2000; $r.details += [PSCustomObject]@{Component = 'System overhead'; Tokens = 2000; Platform = 'common'}
+
+    $platformsList = ($r.platforms.Keys | Where-Object { $_ -ne 'common' }) -join ', '
+    return @{ total = $r.total; details = $r.details; timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'); platforms = $platformsList }
 }
 
 # ─── Load previous baseline ───────────────────────────────
@@ -120,18 +166,20 @@ if ($Diff -and (Test-Path $Diff)) { try { $previous = Get-Content -Raw $Diff | C
 # ─── Auto-measure ─────────────────────────────────────────
 $measureResult = $null
 if ($Measure) {
+    $platArg = if ($Platform) { $Platform.ToLower() } else { '' }
     Write-Host "`n📏 Measuring system prompt..." -ForegroundColor Cyan
-    $measureResult = Measure-SystemPrompt
+    $measureResult = Measure-SystemPrompt -TargetPlatform $platArg
     $InputTokens = $measureResult.total
     if ($CachedInputTokens -eq 0) { $CachedInputTokens = [long][math]::Round($measureResult.total * 0.3) }
 
+    Write-Host "  Platforms detected: $($measureResult.platforms)" -ForegroundColor DarkGray
     $measureResult.details | Sort-Object Tokens -Descending | ForEach-Object {
         Write-Host ("  {0,-40} {1,8:N0}" -f $_.Component, $_.Tokens)
     }
     Write-Host ("  " + "TOTAL system prompt".PadRight(44) + "$("{0:N0}" -f $measureResult.total) tok") -ForegroundColor Cyan
 
     if ($Save) {
-        $measureResult.details | Select-Object Component, Tokens | ConvertTo-Json | Set-Content $Save
+        $measureResult.details | Select-Object Component, Tokens, Platform | ConvertTo-Json | Set-Content $Save
         Write-Host "`n💾 Baseline saved → $Save" -ForegroundColor DarkGray
     }
 }
@@ -175,7 +223,7 @@ if ($Measure -and $measureResult) {
     $mcpPct = if ($measureResult.total -gt 0) { $mcpTotal / $measureResult.total * 100 } else { 0 }
     if ($mcpPct -gt 50) { $recs += "MCP tools dominate ($("{0:N0}" -f $mcpPct)%). Merge or disable unused servers." }
     $largest = $measureResult.details | Sort-Object Tokens -Descending | Select-Object -First 3
-    $recs += "Top 3 optimization targets: $($largest[0].Component) ($("{0:N0}" -f $largest[0].Tokens) tok), $($largest[1].Component) ($("{0:N0}" -f $largest[1].Tokens) tok), $($largest[2].Component) ($("{0:N0}" -f $largest[2].Tokens) tok)"
+    $recs += "Top 3 optimization targets by platform: $($largest[0].Component) [$($largest[0].Platform)] ($("{0:N0}" -f $largest[0].Tokens) tok), $($largest[1].Component) [$($largest[1].Platform)] ($("{0:N0}" -f $largest[1].Tokens) tok), $($largest[2].Component) [$($largest[2].Platform)] ($("{0:N0}" -f $largest[2].Tokens) tok)"
 }
 if ($cacheHitRate -lt 0.4 -and $InputTokens -gt 0) {
     $recs += "Cache too low ($("{0:P1}" -f $cacheHitRate)). Structure prompt for reuse."
@@ -241,14 +289,13 @@ Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Miss Rate", $cacheMissRate)
 Write-Host ("  {0,-33} {1,12:N0}" -f "Reused per Call", $CachedInputTokens)
 
 # ─── PROCESSING PROJECTOR ─────────────────────────────────
-# Show multiple call milestones so user can plan ahead
-$milestones = @(1, 10, 20, 50, 100) | Where-Object { $_ -le $Calls }
-if ($milestones.Count -gt 1) {
+$mslist = $Milestones -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -match '^\d+$' } | ForEach-Object { [long]$_ } | Where-Object { $_ -le $Calls }
+if ($mslist.Count -gt 1) {
     Write-Host "`n🔄 PROCESSING PROJECTOR" -ForegroundColor Yellow
     Write-Host "  What you'll actually pay to process at each stage:" -ForegroundColor DarkGray
     Write-Host ("  {0,8}  {1,14}  {2,14}" -f "Calls", "Total Sent", "Processed (pay)")
     Write-Host ("  {0,8}  {1,14}  {2,14}" -f ("─" * 5), ("─" * 12), ("─" * 14))
-    foreach ($m in $milestones) {
+    foreach ($m in $mslist) {
         $msent = $totalSentPerCall * $m
         $mproc = $firstCallNew + ($eachRepeatedNew * ($m - 1))
         $mColor = if ($m -eq 1) { $riskColor } else { 'Gray' }
