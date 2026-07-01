@@ -1,26 +1,22 @@
 ---
 name: token-calc
-description: Token Auditor — cost control for self-hosted API users. Project processing costs across call milestones. Know your burn rate.
+description: Token Auditor — cost control for self-hosted AI API users. Measure system prompt, project processing costs, guard against surprises.
 ---
 
 # Token Auditor
 
-**Cost control tool for anyone running their own API keys.** Shows what you'll actually pay to process — not just how many tokens you send.
-
-## Why this exists
-
-First call costs 64K. Cache hides the rest. By call 100 you've sent 6.4M but only paid for 1.25M. Without this tool, you don't know your burn rate.
+**Script outputs in English.** AI must read the output and explain to the user in whatever language they spoke to you.
 
 ## CLI
 
 ```powershell
-# Full inspection + processing projector (1, 10, 20, 50, 100 calls)
+# Full inspection + projections
 .\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -OutputTokens 4000 -Calls 100
 
-# Auto-measure your setup
+# Auto-measure OpenCode setup
 .\token-calc.ps1 -Measure -Calls 100
 
-# Guard against surprises
+# Guard against big prompts
 .\token-calc.ps1 -Measure -Threshold 50000
 
 # Track changes
@@ -28,10 +24,13 @@ First call costs 64K. Cache hides the rest. By call 100 you've sent 6.4M but onl
 .\token-calc.ps1 -Measure -Diff baseline.json
 ```
 
-## Key output
+## AI Instructions
 
-| Section | What it tells you |
-|:--|:--|
-| FIRST CALL SHOCK | Cost of opening the session |
-| PROCESSING PROJECTOR | Table: 1 → 10 → 20 → 50 → 100 calls |
-| RECOMMENDATIONS | What to optimize |
+1. **Run the script** with `-Measure` (auto) or manual values
+2. **Read the output** — all sections: FIRST CALL SHOCK, TOKEN BREAKDOWN, CACHE EFFICIENCY, PROCESSING PROJECTOR, RECOMMENDATIONS
+3. **Explain to user in their language** — translate the key findings:
+   - How many tokens they lose before typing (first call shock)
+   - What's eating their system prompt (biggest components)
+   - What happens at 10/20/50/100 calls (processing projector)
+   - What they should do (recommendations)
+4. **Keep technical terms in English**: token, cache hit, cache miss, MCP, context window, threshold
