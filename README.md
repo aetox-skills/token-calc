@@ -1,38 +1,29 @@
-# Token Savings Calculator
+# Token Auditor
 
-Measure system prompt size, project cost savings with compounding multipliers.
+Measure system prompt, breakdown cache hit/miss, project cumulative tokens.
 
-## Quick Start
+**Token-only** — no pricing, no model, no money.
 
-Load `SKILL.md` as an AI skill. The skill teaches any agent the formula directly — no external dependencies.
+## Usage
 
 ```powershell
-# Or run the measurement script (Windows):
-.\token-calc.ps1
-.\token-calc.ps1 -Mode team -Tier paid -CacheHit 0.7
+# Auto-measure your OpenCode system prompt
+.\token-calc.ps1 -Measure -Calls 100
+
+# Manual mode
+.\token-calc.ps1 -InputTokens 50000 -CachedInputTokens 35000 -OutputTokens 2000
+
+# Project a year
+.\token-calc.ps1 -Measure -Calls 100 -CallsPerSession 20 -SessionsPerDay 5 -Days 365
 ```
 
-## Files
+## Output
 
-| File | Purpose |
-|:--|:--|
-| `SKILL.md` | AI agent skill — self-contained formula + constants |
-| `token-calc.ps1` | PowerShell script for automated measurement |
+- Token breakdown: input / cache hit / cache miss / output
+- Cache analysis: hit rate, miss rate, saved per call
+- Call comparison: first call (no cache) vs repeated vs total
+- Cumulative projections: session → day → month → year
 
-## Compatibility
+## License
 
-- OpenCode — auto-discover from `.config/opencode/skills/`
-- ZCode — import from skill-library path
-- Codex / Claude / Gemini CLI — read SKILL.md directly
-- Any AI agent — formula is in the skill, no platform lock-in
-
-## Formula (brief)
-
-```
-saved/call = baseline - current
-saved/year = saved/call × 30 × 30 × 12 × agentCount
-costNoOpt  = baseline × 30 × 30 × 12 × A × $0.435/M
-costOpt    = current  × 30 × 30 × 12 × A × effectivePrice/M
-```
-
-See [SKILL.md](SKILL.md) for full constants and cache compounding.
+MIT

@@ -1,182 +1,203 @@
 <#
 .SYNOPSIS
-  Token savings calculator — measure system prompt, estimate savings with compounding multipliers.
+  Token Auditor — measure system prompt, breakdown cache hit/miss, project cumulative tokens.
 
 .DESCRIPTION
-  Measures current instruction/agent/skill files, estimates token sizes,
-  and projects savings with compounding across calls/sessions/months/agents/cache.
+  Shows how many tokens every call consumes, how much cache can save,
+  and what that adds up to over sessions, days, months, and years.
+  Token-only — no pricing, no model, no money.
 
-.PARAMETER Mode
-  'solo' (default) | 'team' — how many agents in parallel
+.PARAMETER InputTokens
+  Total input tokens per call (manual mode).
 
-.PARAMETER Tier
-  'free' (default) | 'paid' — model pricing tier
+.PARAMETER CachedInputTokens
+  How many of those input tokens hit cache (manual mode).
 
-.PARAMETER CacheHit
-  Cache hit rate 0.0-0.95 (default 0.0 for free, 0.7 for paid)
+.PARAMETER OutputTokens
+  Estimated output tokens per call (optional, default 0).
 
-.PARAMETER Baseline
-  Baseline system prompt size in tokens before any optimization (default 55000)
+.PARAMETER Measure
+  Auto-detect OpenCode system prompt from config files.
+
+.PARAMETER Calls
+  Number of calls to project (default 1).
+
+.PARAMETER CallsPerSession
+  Calls in one session (default 10).
+
+.PARAMETER SessionsPerDay
+  Sessions per day (default 3).
+
+.PARAMETER Days
+  Days to project (default 1).
 
 .EXAMPLE
-  .\token-calc.ps1
-  .\token-calc.ps1 -Mode team -Tier paid -CacheHit 0.7
-  .\token-calc.ps1 -Mode team -Tier paid -CacheHit 0.7 -Baseline 60000
+  # Auto-measure + project a year
+  .\token-calc.ps1 -Measure -Calls 100 -CallsPerSession 20 -SessionsPerDay 5 -Days 365
+
+  # Manual
+  .\token-calc.ps1 -InputTokens 50000 -CachedInputTokens 35000 -OutputTokens 2000 -Calls 100
 #>
 
 param(
-    [ValidateSet('solo','team')][string]$Mode = 'solo',
-    [ValidateSet('free','paid')][string]$Tier = 'free',
-    [double]$CacheHit = $(if ($Tier -eq 'paid') {0.7} else {0.0}),
-    [int]$Baseline = 55000
+    [long]$InputTokens = 0,
+    [long]$CachedInputTokens = 0,
+    [long]$OutputTokens = 0,
+    [switch]$Measure,
+    [long]$Calls = 1,
+    [long]$CallsPerSession = 10,
+    [long]$SessionsPerDay = 3,
+    [long]$Days = 1
 )
 
-# ─── Pricing ──────────────────────────────────────────────
-$priceMiss  = 0.435  # $/M tokens cache miss
-$priceHit   = 0.0036 # $/M tokens cache hit
-$callsPerSession = 30
-$sessionsPerMonth = 30
+# ─── Measure system prompt ────────────────────────────────
+function Measure-SystemPrompt {
+    $files = @(
+        'C:\Users\Gigabyte\CONTEXT.md',
+        'C:\Users\Gigabyte\PROFILE.md',
+        'C:\Users\Gigabyte\AGENTS.md',
+        'E:\MikeData\opencode_data\index.md'
+    )
+    $agentDir = 'C:\Users\Gigabyte\.config\opencode\agents'
+    $skillDir = 'C:\Users\Gigabyte\.config\opencode\skills'
 
-# ─── Measure current system prompt ────────────────────────
-$instructionFiles = @(
-    'C:\Users\Gigabyte\CONTEXT.md',
-    'C:\Users\Gigabyte\PROFILE.md',
-    'C:\Users\Gigabyte\AGENTS.md',
-    'E:\MikeData\opencode_data\index.md'
-)
+    $total = 0
+    $details = @()
 
-$agentDir = 'C:\Users\Gigabyte\.config\opencode\agents'
-$skillDir = 'C:\Users\Gigabyte\.config\opencode\skills'
-
-$totalTokens = 0
-$details = @()
-
-Write-Host "`n══════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host " TOKEN SAVINGS CALCULATOR" -ForegroundColor Cyan
-Write-Host "══════════════════════════════════════════════════" -ForegroundColor Cyan
-
-# Instructions
-foreach ($f in $instructionFiles) {
-    if (Test-Path $f) {
-        $c = Get-Content -Raw $f
-        # Count non-English chars for better estimate
-        $thai   = [regex]::Matches($c, '[\u0E00-\u0E7F]').Count
-        $chinese= [regex]::Matches($c, '[\u4E00-\u9FFF]').Count
-        $engLen = $c.Length - $thai - $chinese
-        $tok    = [math]::Ceiling($engLen/4 + $thai/3 + $chinese/3)
-        $totalTokens += $tok
-        $details += [PSCustomObject]@{Component = $f.Split('\')[-1]; Tokens = $tok; Type = 'instruction'}
-    }
-}
-
-# Agents (frontmatter description only — full body loaded on demand)
-if (Test-Path $agentDir) {
-    foreach ($af in (Get-ChildItem "$agentDir\*.md")) {
-        $c = Get-Content -Raw $af.FullName
-        # Only count frontmatter description line + name (always in context)
-        if ($c -match "description:\s*['""]?([^'""\n]+)") {
-            $desc = $Matches[1]
-            $tok  = [math]::Ceiling($desc.Length/4) + [math]::Ceiling($af.BaseName.Length/4)
-            $totalTokens += $tok
-            $details += [PSCustomObject]@{Component = "$($af.BaseName) (desc)"; Tokens = $tok; Type = 'agent'}
+    # Instruction files
+    foreach ($f in $files) {
+        if (Test-Path $f) {
+            $c = Get-Content -Raw $f
+            $thai    = [regex]::Matches($c, '[\u0E00-\u0E7F]').Count
+            $chinese = [regex]::Matches($c, '[\u4E00-\u9FFF]').Count
+            $engLen  = $c.Length - $thai - $chinese
+            $tok     = [math]::Ceiling($engLen/4 + $thai/3 + $chinese/3)
+            $total += $tok
+            $details += [PSCustomObject]@{Component = $f.Split('\')[-1]; Tokens = $tok}
         }
     }
-}
 
-# Skills (description only — full content loaded on demand)
-if (Test-Path $skillDir) {
-    foreach ($sd in (Get-ChildItem $skillDir -Directory)) {
-        $sf = Join-Path $sd.FullName 'SKILL.md'
-        if (Test-Path $sf) {
-            $c = Get-Content -Raw $sf
+    # Agents
+    if (Test-Path $agentDir) {
+        foreach ($af in (Get-ChildItem "$agentDir\*.md")) {
+            $c = Get-Content -Raw $af.FullName
             if ($c -match "description:\s*['""]?([^'""\n]+)") {
                 $desc = $Matches[1]
-                $tok  = [math]::Ceiling($desc.Length/4) + [math]::Ceiling($sd.Name.Length/4) + 30 # XML wrapper
-                $totalTokens += $tok
-                $details += [PSCustomObject]@{Component = "$($sd.Name) (desc)"; Tokens = $tok; Type = 'skill'}
+                $tok  = [math]::Ceiling($desc.Length/4) + [math]::Ceiling($af.BaseName.Length/4)
+                $total += $tok
+                $details += [PSCustomObject]@{Component = "$($af.BaseName) (agent)"; Tokens = $tok}
             }
         }
     }
+
+    # Skills
+    if (Test-Path $skillDir) {
+        foreach ($sd in (Get-ChildItem $skillDir -Directory)) {
+            $sf = Join-Path $sd.FullName 'SKILL.md'
+            if (Test-Path $sf) {
+                $c = Get-Content -Raw $sf
+                if ($c -match "description:\s*['""]?([^'""\n]+)") {
+                    $desc = $Matches[1]
+                    $tok  = [math]::Ceiling($desc.Length/4) + [math]::Ceiling($sd.Name.Length/4) + 30
+                    $total += $tok
+                    $details += [PSCustomObject]@{Component = "$($sd.Name) (skill)"; Tokens = $tok}
+                }
+            }
+        }
+    }
+
+    # MCP tools
+    $mcpCount = 4
+    $mcpTok   = $mcpCount * 3000
+    $total   += $mcpTok
+    $details += [PSCustomObject]@{Component = "MCP tools x$mcpCount"; Tokens = $mcpTok}
+
+    # Overhead
+    $overhead = 2000
+    $total   += $overhead
+    $details += [PSCustomObject]@{Component = 'OpenCode overhead'; Tokens = $overhead}
+
+    return @{ total = $total; details = $details }
 }
 
-# MCP tool definitions (estimate ~3K per MCP server)
-$mcpCount = 4
-$mcpTokens = $mcpCount * 3000
-$totalTokens += $mcpTokens
-$details += [PSCustomObject]@{Component = "MCP tools x$mcpCount"; Tokens = $mcpTokens; Type = 'mcp'}
+# ─── Auto-measure ─────────────────────────────────────────
+if ($Measure) {
+    Write-Host "`n📏 Measuring system prompt..." -ForegroundColor Cyan
+    $m = Measure-SystemPrompt
+    $InputTokens = $m.total
+    if ($CachedInputTokens -eq 0) { $CachedInputTokens = [long][math]::Round($m.total * 0.3) }
 
-# OpenCode system overhead (tools, permissions, metadata ~2K)
-$overhead = 2000
-$totalTokens += $overhead
-$details += [PSCustomObject]@{Component = 'OpenCode overhead'; Tokens = $overhead; Type = 'system'}
+    # Show breakdown
+    $m.details | Sort-Object Tokens -Descending | ForEach-Object {
+        Write-Host ("  {0,-40} {1,8:N0}" -f $_.Component, $_.Tokens)
+    }
+    Write-Host ("  " + "TOTAL system prompt".PadRight(44) + "$("{0:N0}" -f $m.total) tok" ) -ForegroundColor Cyan
+}
 
-# ─── Calculations ─────────────────────────────────────────
-$savedPerCall = [math]::Max(0, $Baseline - $totalTokens)
-$agentMultiplier = if ($Mode -eq 'team') {3} else {1}
+# ─── Validate ─────────────────────────────────────────────
+if ($InputTokens -le 0 -and $OutputTokens -le 0) {
+    Write-Error "Need at least some tokens. Use -Measure or -InputTokens."
+    exit 1
+}
 
-$effectivePrice = ($priceMiss * (1 - $CacheHit)) + ($priceHit * $CacheHit)
+# ─── Token breakdown ──────────────────────────────────────
+$cacheMissTokens = [math]::Max(0, $InputTokens - $CachedInputTokens)
+$grandTotal = $InputTokens + $OutputTokens
 
-$perSession     = $totalTokens * $callsPerSession * $agentMultiplier
-$perMonth       = $perSession * $sessionsPerMonth
-$perYear        = $perMonth * 12
+$cacheHitRate  = if ($InputTokens -gt 0) { $CachedInputTokens / $InputTokens } else { 0 }
+$cacheMissRate = 1 - $cacheHitRate
 
-$savedPerSession= $savedPerCall * $callsPerSession * $agentMultiplier
-$savedPerMonth  = $savedPerSession * $sessionsPerMonth
-$savedPerYear   = $savedPerMonth * 12
+# ─── Cumulative projections ───────────────────────────────
+$perCall       = $grandTotal
+$perSession    = $perCall * $CallsPerSession
+$perDay        = $perSession * $SessionsPerDay
+$perMonth      = $perDay * 30
+$perYear       = $perDay * $Days
 
-# Cost = tokens × calls × agents × price / 1,000,000 (price is per M tokens)
-$costBaselineSession = $Baseline * $callsPerSession * $agentMultiplier * $priceMiss / 1e6
-$costCurrentSession  = $totalTokens * $callsPerSession * $agentMultiplier * $effectivePrice / 1e6
-$costBaselineMonth   = $costBaselineSession * $sessionsPerMonth
-$costCurrentMonth    = $costCurrentSession * $sessionsPerMonth
-$costBaselineYear    = $costBaselineMonth * 12
-$costCurrentYear     = $costCurrentMonth * 12
+$firstCallTotal      = $InputTokens + $OutputTokens  # no cache benefit
+$extraPerRepeatedCall = $cacheMissTokens + $OutputTokens  # what's actually new each time
+$repeatedCallsTotal   = $firstCallTotal + ($extraPerRepeatedCall * ($Calls - 1))
+$allCallsTotal        = $repeatedCallsTotal
 
 # ─── Display ──────────────────────────────────────────────
-Write-Host "`n📐 CURRENT MEASUREMENT" -ForegroundColor Yellow
-Write-Host "──────────────────────────────"
-$details | Sort-Object Tokens -Descending | ForEach-Object { 
-    $tok = if ($_.Tokens -match '\.') { [int][math]::Round([double]$_.Tokens) } else { [int]$_.Tokens }
-    Write-Host ("  " + $_.Component.PadRight(40) + $tok.ToString().PadLeft(8))
+function Line { Write-Host ("─" * 60) -ForegroundColor DarkGray }
+
+Line
+Write-Host "  TOKEN AUDITOR" -ForegroundColor Cyan
+Line
+
+Write-Host "`n📊 TOKEN BREAKDOWN (per call)" -ForegroundColor Yellow
+Write-Host ("  {0,-30} {1,12}" -f "Total Input Tokens", ("{0:N0}" -f $InputTokens))
+Write-Host ("  {0,-30} {1,12}" -f "  Cache Hit", ("{0:N0}" -f $CachedInputTokens))
+Write-Host ("  {0,-30} {1,12}" -f "  Cache Miss", ("{0:N0}" -f $cacheMissTokens))
+if ($OutputTokens -gt 0) {
+    Write-Host ("  {0,-30} {1,12}" -f "Output Tokens", ("{0:N0}" -f $OutputTokens))
+}
+Write-Host ("  {0,-30} {1,12}" -f "Total per Call", ("{0:N0}" -f $grandTotal)) -ForegroundColor Cyan
+
+Write-Host "`n📈 CACHE ANALYSIS" -ForegroundColor Yellow
+Write-Host ("  {0,-30} {1,12:P1}" -f "Cache Hit Rate", $cacheHitRate)
+Write-Host ("  {0,-30} {1,12:P1}" -f "Cache Miss Rate", $cacheMissRate)
+Write-Host ("  {0,-30} {1,12:N0}" -f "Cache Saved per Call", $CachedInputTokens)
+
+if ($Calls -gt 1) {
+    Write-Host "`n🔄 CALL COMPARISON" -ForegroundColor Yellow
+    Write-Host ("  {0,-30} {1,12:N0}" -f "First Call (0% cache)", $firstCallTotal)
+    Write-Host ("  {0,-30} {1,12:N0}" -f "Repeated Call", $grandTotal)
+    Write-Host ("  {0,-30} {1,12:N0}" -f "$Calls calls total", $allCallsTotal)
 }
 
-Write-Host ("  TOTAL system prompt".PadRight(50) + "$totalTokens tok".PadLeft(8)) -ForegroundColor Cyan
-
-Write-Host "`n⚙️  MODE: $Mode  |  TIER: $Tier  |  CACHE HIT: $($CacheHit * 100)%" -ForegroundColor Yellow
-Write-Host "──────────────────────────────────────────────────────────"
-
-$savedPct = if ($Baseline -gt 0) { "{0:P0}" -f ($savedPerCall/$Baseline) } else { "0%" }
-Write-Host "`n📊 SAVINGS (vs ${Baseline}K baseline)" -ForegroundColor Green
-Write-Host "──────────────────────────────"
-Write-Host "  Per call".PadRight(35) + "${savedPerCall} tok ($savedPct)".PadLeft(20)
-Write-Host "  Per session ($callsPerSession calls)".PadRight(35) + "${savedPerSession} tok".PadLeft(20)
-Write-Host "  Per month".PadRight(35) + "${savedPerMonth} tok".PadLeft(20)
-Write-Host "  Per year".PadRight(35) + "${savedPerYear} tok".PadLeft(20)
-
-$annualSaved = $costBaselineYear - $costCurrentYear
-$annualSavedColor = if ($annualSaved -gt 100) {'Green'} elseif ($annualSaved -gt 10) {'Yellow'} else {'Gray'}
-
-Write-Host "`n💰 COST PROJECTION (annual)" -ForegroundColor Magenta
-Write-Host "──────────────────────────────"
-Write-Host "  Without optimization (100% miss)".PadRight(50) + ("`$$($costBaselineYear.ToString('N2'))").PadLeft(12)
-Write-Host ("  Current (`$$effectivePrice`/M effective)").PadRight(50) + ("`$$($costCurrentYear.ToString('N2'))").PadLeft(12)
-Write-Host "  ANNUAL SAVINGS".PadRight(50) + ("`$$($annualSaved.ToString('N2'))").PadLeft(12) -ForegroundColor $annualSavedColor
-
-Write-Host "`n🔄 COMPOUNDING VISUAL" -ForegroundColor Cyan
-Write-Host "──────────────────────────────"
-Write-Host "  1 call".PadRight(45) + "${savedPerCall} tok".PadLeft(12)
-Write-Host "  1 session ($callsPerSession calls)".PadRight(45) + "${savedPerSession} tok".PadLeft(12)
-Write-Host "  1 month ($sessionsPerMonth sessions)".PadRight(45) + "${savedPerMonth} tok".PadLeft(12)
-Write-Host "  1 year (12 months)".PadRight(45) + "${savedPerYear} tok".PadLeft(12)
-
-if ($Mode -eq 'team') {
-    $teamYear = $savedPerYear * 3
-    Write-Host "  1 year x 3 agents (team)".PadRight(45) + "${teamYear} tok".PadLeft(12) -ForegroundColor DarkCyan
-}
-if ($CacheHit -gt 0) {
-    $effectiveMult = [math]::Round($priceMiss / $effectivePrice, 1)
-    $cacheYear = [long]($savedPerYear * $priceMiss / $effectivePrice)
-    Write-Host ("  With $($CacheHit*100)% cache hit").PadRight(45) + "${cacheYear} tok".PadLeft(12) -ForegroundColor DarkCyan
+Write-Host "`n📅 CUMULATIVE PROJECTIONS" -ForegroundColor Yellow
+Write-Host ("  {0,-30} {1,12}" -f "Per Call", ("{0:N0}" -f $perCall))
+Write-Host ("  {0,-30} {1,12}" -f "Per Session ($CallsPerSession calls)", ("{0:N0}" -f $perSession))
+Write-Host ("  {0,-30} {1,12}" -f "Per Day ($SessionsPerDay sessions)", ("{0:N0}" -f $perDay))
+Write-Host ("  {0,-30} {1,12}" -f "Per Month (30 days)", ("{0:N0}" -f $perMonth))
+if ($Days -gt 1) {
+    Write-Host ("  {0,-30} {1,12}" -f "Per $Days days", ("{0:N0}" -f $perYear))
+} else {
+    Write-Host ("  {0,-30} {1,12}" -f "Per Year (365 days)", ("{0:N0}" -f ($perDay * 365)))
 }
 
-Write-Host "`n══════════════════════════════════════════════════" -ForegroundColor Cyan
+Line
+Write-Host "  Token counts are approximate. Use exact tokenizer for billing." -ForegroundColor DarkGray
+Write-Host
