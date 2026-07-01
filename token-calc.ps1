@@ -142,22 +142,25 @@ if ($InputTokens -le 0 -and $OutputTokens -le 0) {
 
 # ─── Token breakdown ──────────────────────────────────────
 $cacheMissTokens = [math]::Max(0, $InputTokens - $CachedInputTokens)
-$grandTotal = $InputTokens + $OutputTokens
+$totalSentPerCall = $InputTokens + $OutputTokens
 
 $cacheHitRate  = if ($InputTokens -gt 0) { $CachedInputTokens / $InputTokens } else { 0 }
 $cacheMissRate = 1 - $cacheHitRate
 
 # ─── Cumulative projections ───────────────────────────────
-$perCall       = $grandTotal
-$perSession    = $perCall * $CallsPerSession
+# Raw: every call sends full input + output
+$rawCumulative     = $totalSentPerCall * $Calls
+
+# Effective: cache means each repeated call only "processes" new input + output
+$firstCallNew      = $totalSentPerCall                               # first call processes everything
+$eachRepeatedNew   = $cacheMissTokens + $OutputTokens                # repeated calls process only fresh content
+$effectiveCumulative = $firstCallNew + ($eachRepeatedNew * ($Calls - 1))
+
+# ─── Session/day/month/year on raw total ──────────────────
+$perSession    = $totalSentPerCall * $CallsPerSession
 $perDay        = $perSession * $SessionsPerDay
 $perMonth      = $perDay * 30
 $perYear       = $perDay * $Days
-
-$firstCallTotal      = $InputTokens + $OutputTokens  # no cache benefit
-$extraPerRepeatedCall = $cacheMissTokens + $OutputTokens  # what's actually new each time
-$repeatedCallsTotal   = $firstCallTotal + ($extraPerRepeatedCall * ($Calls - 1))
-$allCallsTotal        = $repeatedCallsTotal
 
 # ─── Display ──────────────────────────────────────────────
 function Line { Write-Host ("─" * 60) -ForegroundColor DarkGray }
@@ -167,36 +170,35 @@ Write-Host "  TOKEN AUDITOR" -ForegroundColor Cyan
 Line
 
 Write-Host "`n📊 TOKEN BREAKDOWN (per call)" -ForegroundColor Yellow
-Write-Host ("  {0,-30} {1,12}" -f "Total Input Tokens", ("{0:N0}" -f $InputTokens))
-Write-Host ("  {0,-30} {1,12}" -f "  Cache Hit", ("{0:N0}" -f $CachedInputTokens))
-Write-Host ("  {0,-30} {1,12}" -f "  Cache Miss", ("{0:N0}" -f $cacheMissTokens))
+Write-Host ("  {0,-30} {1,12}" -f "Input Sent", ("{0:N0}" -f $InputTokens))
+Write-Host ("  {0,-30} {1,12}" -f "  ↳ Cache Hit (reused)", ("{0:N0}" -f $CachedInputTokens))
+Write-Host ("  {0,-30} {1,12}" -f "  ↳ Cache Miss (fresh)", ("{0:N0}" -f $cacheMissTokens))
 if ($OutputTokens -gt 0) {
-    Write-Host ("  {0,-30} {1,12}" -f "Output Tokens", ("{0:N0}" -f $OutputTokens))
+    Write-Host ("  {0,-30} {1,12}" -f "Output Received", ("{0:N0}" -f $OutputTokens))
 }
-Write-Host ("  {0,-30} {1,12}" -f "Total per Call", ("{0:N0}" -f $grandTotal)) -ForegroundColor Cyan
+Write-Host ("  {0,-30} {1,12}" -f "Total Sent/Received", ("{0:N0}" -f $totalSentPerCall)) -ForegroundColor Cyan
 
-Write-Host "`n📈 CACHE ANALYSIS" -ForegroundColor Yellow
+Write-Host "`n📈 CACHE EFFICIENCY" -ForegroundColor Yellow
 Write-Host ("  {0,-30} {1,12:P1}" -f "Cache Hit Rate", $cacheHitRate)
 Write-Host ("  {0,-30} {1,12:P1}" -f "Cache Miss Rate", $cacheMissRate)
-Write-Host ("  {0,-30} {1,12:N0}" -f "Cache Saved per Call", $CachedInputTokens)
+Write-Host ("  {0,-30} {1,12:N0}" -f "Reused per Call (no reprocess)", $CachedInputTokens)
 
 if ($Calls -gt 1) {
-    Write-Host "`n🔄 CALL COMPARISON" -ForegroundColor Yellow
-    Write-Host ("  {0,-30} {1,12:N0}" -f "First Call (0% cache)", $firstCallTotal)
-    Write-Host ("  {0,-30} {1,12:N0}" -f "Repeated Call", $grandTotal)
-    Write-Host ("  {0,-30} {1,12:N0}" -f "$Calls calls total", $allCallsTotal)
+    Write-Host "`n🔄 CUMULATIVE ($Calls calls)" -ForegroundColor Yellow
+    Write-Host ("  {0,-30} {1,12:N0}" -f "First Call (all fresh)", $firstCallNew)
+    Write-Host ("  {0,-30} {1,12:N0}" -f "Each Repeated (fresh only)", $eachRepeatedNew)
+    Write-Host ("  {0,-30} {1,12:N0}" -f "Cache Saved (not reprocessed)", ($CachedInputTokens * ($Calls - 1)))
+    Write-Host ("  {0,-30} {1,12:N0}" -f "Total Sent (all calls)", $rawCumulative)
+    Write-Host ("  {0,-30} {1,12:N0}" -f "Total Processed (fresh)", $effectiveCumulative) -ForegroundColor Cyan
 }
 
-Write-Host "`n📅 CUMULATIVE PROJECTIONS" -ForegroundColor Yellow
-Write-Host ("  {0,-30} {1,12}" -f "Per Call", ("{0:N0}" -f $perCall))
-Write-Host ("  {0,-30} {1,12}" -f "Per Session ($CallsPerSession calls)", ("{0:N0}" -f $perSession))
-Write-Host ("  {0,-30} {1,12}" -f "Per Day ($SessionsPerDay sessions)", ("{0:N0}" -f $perDay))
-Write-Host ("  {0,-30} {1,12}" -f "Per Month (30 days)", ("{0:N0}" -f $perMonth))
-if ($Days -gt 1) {
-    Write-Host ("  {0,-30} {1,12}" -f "Per $Days days", ("{0:N0}" -f $perYear))
-} else {
-    Write-Host ("  {0,-30} {1,12}" -f "Per Year (365 days)", ("{0:N0}" -f ($perDay * 365)))
-}
+Write-Host "`n📅 PROJECTIONS (total sent)" -ForegroundColor Yellow
+Write-Host ("  {0,-33} {1,12:N0}" -f "Per Call", $totalSentPerCall)
+Write-Host ("  {0,-33} {1,12:N0}" -f "Per Session ($CallsPerSession calls)", $perSession)
+Write-Host ("  {0,-33} {1,12:N0}" -f "Per Day ($SessionsPerDay sessions)", $perDay)
+Write-Host ("  {0,-33} {1,12:N0}" -f "Per Month (30 days)", $perMonth)
+$yLabel = if ($Days -eq 365) { "Per Year (365 days)" } else { "Per $Days days" }
+Write-Host ("  {0,-33} {1,12:N0}" -f $yLabel, $perYear)
 
 Line
 Write-Host "  Token counts are approximate. Use exact tokenizer for billing." -ForegroundColor DarkGray
