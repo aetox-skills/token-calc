@@ -1,9 +1,17 @@
 ---
 name: token-calc
-description: Token Auditor — cost control for self-hosted API users. Multi-platform: OpenCode, ZCode, Claude Code. Project processing costs, guard against surprises.
+description: Token Auditor — measure your system prompt, identify waste, project costs, and get prescriptions. Multi-platform: OpenCode, ZCode, Claude Code, or any ADE.
 ---
 
 # Token Auditor
+
+**We diagnose what your system prompt is made of, how much it costs, and what to do about it.**
+
+Every AI coding tool sends a system prompt with every API call — instructions, tool definitions, MCP schemas, skills, history. It grows silently. You add one MCP server → permanent +3K tok. You chat for 20 messages → history eats 100K+ per call. Cache is 120× cheaper than miss, but most people never check their hit rate.
+
+That's why this exists. **Measure before you optimize. Know before you pay.**
+
+The goal isn't a smaller number. The goal is knowing where your tokens go so you can decide what's worth it.
 
 **AI reads output in English, then explains to user in their language.**
 

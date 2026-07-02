@@ -1,8 +1,12 @@
 # Token Auditor
 
-**Multi-platform cost control for self-hosted AI API users.**
+**Measure your system prompt. Identify waste. Get prescriptions.**
 
-Auto-detect: **OpenCode** · **ZCode** · **Claude Code** (or manual mode).
+Your API calls cost more than they should. You just don't know how much — yet.
+
+Every AI coding tool sends a system prompt with every call. Add an MCP server? Permanent +3K tok. Chat for 20 messages? History eats 100K+. Cache is 120× cheaper than a miss, but most people never check their hit rate.
+
+We fix that. **Measure → Diagnose → Prescribe.** Platform-agnostic: OpenCode, ZCode, Claude Code, Codex, Cursor — any ADE that calls an API.
 
 ---
 
@@ -64,7 +68,11 @@ Auto-detect: **OpenCode** · **ZCode** · **Claude Code** (or manual mode).
 
 ## Optimization Guide
 
-See [SKILL.md](SKILL.md) → **Optimization Strategy** — techniques that work on **any** AI coding tool (OpenCode, Claude Code, Codex, Cursor, ZCode, Gemini CLI). Cap history, filter command output, trim MCPs, slim instructions. Plus a real cost projection: ~22K tok/call at ~77% cache hit.
+> Read this after you've measured. Don't guess what to fix — let the numbers tell you.
+
+See [SKILL.md](SKILL.md) → **Optimization Strategy** for a full table of problems → solutions, cross-platform. Cap history, filter command output, trim MCPs, slim instructions — all with expected token savings. Includes a real cost projection: ~22K tok/call at ~77% cache hit.
+
+**Prescriptions link to tools that fix each problem:** [opencode-history-trimmer](https://github.com/aetox-skills/opencode-history-trimmer) for history bloat, [token-saver (RTK)](https://github.com/aetox-skills/token-saver) for noisy command output.
 
 ## Philosophy
 
