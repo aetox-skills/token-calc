@@ -17,39 +17,54 @@ The goal isn't a smaller number. The goal is knowing where your tokens go so you
 
 ## CLI
 
-```powershell
+Both a Python script (cross-platform) and a PowerShell script (Windows) are provided. Same args, same output.
+
+**Python — works on Windows / macOS / Linux:**
+```bash
 # Auto-detect any AI coding tool + full projection
-.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
+python token-calc.py --measure --calls 100 --output-tokens 2000
 
 # Target specific platform
-.\token-calc.ps1 -Measure -Platform opencode
-.\token-calc.ps1 -Measure -Platform zcode
-.\token-calc.ps1 -Measure -Platform claude
+python token-calc.py --measure --platform opencode
+python token-calc.py --measure --platform zcode
+python token-calc.py --measure --platform claude
 
 # Custom projection milestones
-.\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -Calls 200 -Milestones "1,5,25,50,100,200"
+python token-calc.py --input-tokens 60000 --cached-input-tokens 52000 --calls 200 --milestones "1,5,25,50,100,200"
 
 # Guard mode
-.\token-calc.ps1 -Measure -Threshold 50000
+python token-calc.py --measure --threshold 50000
 
 # Track changes
-.\token-calc.ps1 -Measure -Save baseline.json
-.\token-calc.ps1 -Measure -Diff baseline.json
+python token-calc.py --measure --save baseline.json
+python token-calc.py --measure --diff baseline.json
 
 # Manual
-.\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -OutputTokens 4000
+python token-calc.py --input-tokens 60000 --cached-input-tokens 52000 --output-tokens 4000
 ```
 
-## New params
+**PowerShell — Windows:**
+```powershell
+.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
+```
 
-| Param | Default | Description |
-|:--|:--|:--|
-| `-Platform` | auto | opencode / zcode / claude |
-| `-Milestones` | 1,10,20,50,100 | Custom projection steps |
+## Args
+
+| Python arg | PowerShell param | Default | Description |
+|:--|:--|:--:|:--|
+| `--platform` | `-Platform` | auto | opencode / zcode / claude |
+| `--milestones` | `-Milestones` | 1,10,20,50,100 | Projection steps |
+| `--calls` | `-Calls` | 1 | Calls to project |
+| `--calls-per-session` | `-CallsPerSession` | 30 | Calls per session |
+| `--sessions-per-day` | `-SessionsPerDay` | 1 | Sessions per day |
+| `--threshold` | `-Threshold` | 0 | Exit if exceeded |
+| `--context-window` | `-ContextWindow` | 200000 | Model context window |
+| `--save` | `-Save` | '' | Save baseline JSON |
+| `--diff` | `-Diff` | '' | Compare vs baseline |
 
 ## AI Workflow
 
-1. Run the script
+1. Run the Python or PowerShell script with `--measure` or `-Measure`
 2. Read output sections: FIRST CALL SHOCK → BREAKDOWN → CACHE → PROCESSING PROJECTOR → RECOMMENDATIONS
 3. Explain key findings in user's language
 4. Keep technical terms in English (token, cache hit/miss, MCP, threshold)

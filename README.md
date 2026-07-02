@@ -12,11 +12,15 @@ We fix that. **Measure → Diagnose → Prescribe.** Platform-agnostic: OpenCode
 
 ## Quick Start
 
-```powershell
-# Auto-detect + full projection
-.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
+**Python (cross-platform — Windows / macOS / Linux):**
+```bash
+python token-calc.py --measure --calls 100 --output-tokens 2000
+python token-calc.py --input-tokens 60000 --cached-input-tokens 52000 --calls 200
+```
 
-# Or manual
+**PowerShell (Windows):**
+```powershell
+.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
 .\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -OutputTokens 4000 -Calls 100
 ```
 
