@@ -96,24 +96,25 @@ Below is a real measurement from an OpenCode setup that applied all of the above
 | **~Total input per call** | **~18,000–24,000** | |
 | Output | ~2,000 | varies by query |
 
-**Cache efficiency on DeepSeek V4 Flash ($0.435/M miss, $0.0036/M hit):**
+**Cache efficiency:**
 
 | Metric | Value |
 |:--|:--|
 | Cache hit rate | ~77% |
 | Cached per call | ~17,000 tok |
 | Fresh per call | ~5,000 tok |
-| Effective price | ~$0.103/M |
 
-**Cost projection:**
+> Want to know what this costs in your currency? If you have a skill or tool installed that can look up your model's current API pricing, use it. Otherwise, skip the dollar amounts — the token counts above are all you need to optimize.
 
-| Calls | Processed (pay) | Cost |
+**Token projection (what you actually pay to process, not what you send):**
+
+| Calls | Sent to API | Actually processed (pay) |
 |:--:|:--:|:--:|
-| 1 (cold) | 24,000 tok | ~$0.010 |
-| 10 | 87,000 tok | ~$0.038 |
-| 20 | 157,000 tok | ~$0.068 |
-| 30 (session) | 227,000 tok | ~$0.099 |
-| Month (30 sessions) | 6.81M tok | ~$2.97 |
-| Year | 81.7M tok | ~$35.6 |
+| 1 (cold) | 24,000 tok | 24,000 tok |
+| 10 | 240,000 tok | 87,000 tok |
+| 20 | 480,000 tok | 157,000 tok |
+| 30 (session) | 720,000 tok | 227,000 tok |
+| Month (30 sessions) | 21.6M tok | 6.81M tok |
+| Year | 259.2M tok | 81.7M tok |
 
-**Key insight:** Cache hit pricing (120× cheaper) means once the session starts, you only pay for fresh input — everything else is reused. The biggest wins come from keeping your prompt lean and your history capped.
+**Key insight:** "Sent" is what leaves your machine. **"Processed" is what you actually pay for** — only the cache miss + output. The gap gets wider the longer the session runs. Once your system prompt is cached, every call after the first is nearly free to send.

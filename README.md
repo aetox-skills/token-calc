@@ -70,13 +70,15 @@ We fix that. **Measure → Diagnose → Prescribe.** Platform-agnostic: OpenCode
 
 > Read this after you've measured. Don't guess what to fix — let the numbers tell you.
 
-See [SKILL.md](SKILL.md) → **Optimization Strategy** for a full table of problems → solutions, cross-platform. Cap history, filter command output, trim MCPs, slim instructions — all with expected token savings. Includes a real cost projection: ~22K tok/call at ~77% cache hit.
+See [SKILL.md](SKILL.md) → **Optimization Strategy** for a full table of problems → solutions, cross-platform. Cap history, filter command output, trim MCPs, slim instructions — all with expected token savings. Includes a processed-token projection: ~22K tok/call at ~77% cache hit (6.8M tok/month vs 21.6M sent).
 
 **Prescriptions link to tools that fix each problem:** [opencode-history-trimmer](https://github.com/aetox-skills/opencode-history-trimmer) for history bloat, [token-saver (RTK)](https://github.com/aetox-skills/token-saver) for noisy command output.
 
 ## Philosophy
 
-**Token-only.** No pricing, no model, no money. We measure tokens — you handle costs. That keeps this tool maintainable without tracking ever-changing provider prices.
+**Tokens only.** We measure what leaves your machine — cache hit, cache miss, output, processed totals. No pricing, no model, no money. Prices change, models change, but token waste is universal.
+
+> Have a pricing lookup skill installed? Use it alongside this one to convert tokens to dollars. Don't have one? The token counts are all you need to optimize — cutting waste saves money regardless of what you pay per token.
 
 ## License
 
