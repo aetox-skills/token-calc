@@ -80,9 +80,22 @@ See [SKILL.md](SKILL.md) → **Optimization Strategy** for a full table of probl
 
 ## Philosophy
 
-**Tokens only.** We measure what leaves your machine — cache hit, cache miss, output, processed totals. No pricing, no model, no money. Prices change, models change, but token waste is universal.
+### Tokens only
+We measure what leaves your machine — cache hit, cache miss, output, processed totals. **No pricing, no model, no money.** Prices change, models change, but token waste is universal.
 
-> Have a pricing lookup skill installed? Use it alongside this one to convert tokens to dollars. Don't have one? The token counts are all you need to optimize — cutting waste saves money regardless of what you pay per token.
+> If you have a pricing lookup skill, use it alongside this one. If not, the token counts are all you need — cutting waste saves money regardless of rate.
+
+### Measure before you optimize
+Don't guess what to cut. Run the script first. The numbers tell you where the waste is — instructions, MCPs, history, skills. **The goal isn't a smaller number. The goal is knowing where your tokens go so you can decide what's worth it.**
+
+### "Sent" ≠ "Processed"
+What you send to the API is not what you pay for. Cache reuse means the first call carries the full system prompt; every call after that only pays for fresh input. **The gap between "sent" and "processed" is where optimization lives.**
+
+### Cross-platform by design
+This works on any AI coding tool that calls an API — OpenCode, Claude Code, Codex, Cursor, ZCode, Gemini CLI. The problems are the same: bloat is universal, and so are the solutions. **We don't care which tool you use. We care about what you send.**
+
+### Diagnose → Prescribe
+This is not a calculator. A calculator tells you a number. We tell you what's eating tokens, how much each layer costs, and where to look for savings. **We exist because waste is invisible until someone measures it.**
 
 ## License
 
