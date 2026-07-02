@@ -151,9 +151,11 @@ function Measure-SystemPrompt {
     }
 
     # ── Cross-platform estimates ──────────────────────────
-    $mcpTok = 4 * 3000
+    $mcpTok = 4 * 2000  # ~2K per server, Obsidian heaviest
     $r.total += $mcpTok; $r.details += [PSCustomObject]@{Component = "MCP tools x4"; Tokens = $mcpTok; Platform = 'common'}
     $r.total += 2000; $r.details += [PSCustomObject]@{Component = 'System overhead'; Tokens = 2000; Platform = 'common'}
+    $r.total += 3000; $r.details += [PSCustomObject]@{Component = 'History (capped ~6 msgs)'; Tokens = 3000; Platform = 'common'}
+
 
     $platformsList = ($r.platforms.Keys | Where-Object { $_ -ne 'common' }) -join ', '
     return @{ total = $r.total; details = $r.details; timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'); platforms = $platformsList }

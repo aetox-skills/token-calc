@@ -62,6 +62,11 @@ Auto-detect: **OpenCode** · **ZCode** · **Claude Code** (or manual mode).
 - **Track drift**: Compare baseline across config changes
 - **Multi-tool**: Compare OpenCode vs ZCode prompt sizes
 
+## Real-world Reference
+
+See [SKILL.md](SKILL.md) for a complete worked example: **OpenCode Steward (post-optimization)** —  
+a ~22K system prompt with ~77% cache hit, costing ~$0.07 for 20 prompts on DeepSeek V4 Flash.
+
 ## Philosophy
 
 **Token-only.** No pricing, no model, no money. We measure tokens — you handle costs. That keeps this tool maintainable without tracking ever-changing provider prices.
