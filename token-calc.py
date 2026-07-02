@@ -318,8 +318,8 @@ def main():
         total += 2000  # system overhead
         all_details.append({"component": "System overhead", "tokens": 2000, "platform": "common"})
 
-        total += 3000  # history cap estimate
-        all_details.append({"component": "History (capped ~6 msgs)", "tokens": 3000, "platform": "common"})
+    total += 1500  # history cap estimate (~3 msgs)
+    all_details.append({"component": "History (capped ~3 msgs)", "tokens": 1500, "platform": "common"})
 
         args.input_tokens = total
         if args.cached_input_tokens == 0:
