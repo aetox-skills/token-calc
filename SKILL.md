@@ -57,21 +57,23 @@ description: Token Auditor — cost control for self-hosted API users. Multi-pla
 
 ## Optimization Strategy
 
-If your measurement shows a large system prompt (>30K tok), here are proven ways to shrink it:
+Every AI coding tool sends the same categories of tokens. The tools differ, but the levers are the same. Here's how to shrink each layer — regardless of which ADE you use (OpenCode, Claude Code, Codex, Cursor, ZCode, Gemini CLI).
 
-| If the problem is… | Try this | Expected savings |
-|:--|:--|:--|
-| History grows every call | **Cap history** — use a plugin that trims conversation to the last N messages before each API request. [opencode-history-trimmer](https://github.com/aetox-skills/opencode-history-trimmer) does this for OpenCode. | ~2–5K tok/call (and stays flat) |
-| Bash tool output is verbose | **Filter command output** — a CLI proxy that intercepts bash commands and strips noise (progress bars, install logs, passed test lines). [token-saver (RTK)](https://github.com/aetox-skills/token-saver) saves 55–90% on git, test, install, find. | ~500–3000 tok/call per bash command |
-| Instruction files are bloated | **Trim to essentials** — remove redundant descriptions, translate non-English instructions, cut finished-task history. | ~5–15K tok |
-| MCP servers you don't use | **Disable or comment out** — each MCP injects tool schemas. Keep only what the current workflow needs. | ~2–4K tok/server |
-| Too many skills registered | **Remove unused skills** — each skill adds name + description to `available_skills`. Keep what the agent actually loads. | ~300–500 tok/skill |
+| Layer | Problem | Solution | Works on | Expected savings |
+|:--|:--|:--|:--|:--:|
+| **Conversation history** | Grows every call, most of it irrelevant | **Cap at N messages.** OpenCode: [opencode-history-trimmer](https://github.com/aetox-skills/opencode-history-trimmer) plugin. Claude Code: use `compact` or `/compact`. Codex: lower `message_limit` in config. Other ADEs: apply the same principle — keep last few exchanges. | All ADEs | ~2–5K/call (stays flat) |
+| **Command/tool output** | Noise from progress bars, install logs, passed tests | **Filter output at the CLI level.** [token-saver (RTK)](https://github.com/aetox-skills/token-saver) intercepts any bash command and strips noise before the ADE sees it — works with any tool that runs bash. | Any tool via bash | ~500–3000/call per command |
+| **Instruction files** | Bloated docs, redundant descriptions, non-English instructions | **Trim to essentials.** Only load what the agent actually needs. Translate non-English content. Cut finished-task references. | All ADEs | ~5–15K |
+| **MCP servers** | Each server injects full tool schemas into every call | **Disable unused ones.** Comment out servers that aren't needed for the current task. Activate on demand. | All ADEs with MCP | ~2–4K/server |
+| **Skills / tools metadata** | Every registered skill adds name + description | **Remove unused.** Only keep skills the agent actually loads via `skill()` or equivalent. Shorten descriptions. | OpenCode, ZCode, Claude Code | ~300–500/skill |
+
+> The pattern is universal: **identify what's in your prompt → ask if it changes between calls → if it doesn't, it's probably cached already. If it does, minimize it.**
 
 ---
 
 ## Example: What Optimization Looks Like
 
-Below is a real measurement from an OpenCode setup that applied all of the above: trimmed instructions, disabled unused MCPs, compressed bash output, and capped history at 6 messages.
+Below is a real measurement from an OpenCode setup that applied all of the above: trimmed instructions, disabled unused MCPs, compressed bash output, and capped history at 6 messages. The same techniques work on any ADE.
 
 **Per-call breakdown (input):**
 

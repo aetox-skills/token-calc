@@ -64,7 +64,7 @@ Auto-detect: **OpenCode** · **ZCode** · **Claude Code** (or manual mode).
 
 ## Optimization Guide
 
-See [SKILL.md](SKILL.md) → **Optimization Strategy** for a checklist of what to do when your prompt is too large — compress bash output, cap history, trim MCPs, slim instructions — plus a cost projection example showing ~22K tok/call at ~77% cache hit.
+See [SKILL.md](SKILL.md) → **Optimization Strategy** — techniques that work on **any** AI coding tool (OpenCode, Claude Code, Codex, Cursor, ZCode, Gemini CLI). Cap history, filter command output, trim MCPs, slim instructions. Plus a real cost projection: ~22K tok/call at ~77% cache hit.
 
 ## Philosophy
 

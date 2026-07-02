@@ -60,7 +60,7 @@ param(
     [string]$Diff = '',
     [long]$Threshold = 0,
     [long]$ContextWindow = 200000,
-    [string]$Platform = '',
+    [string]$Platform = '',  # opencode | zcode | claude — auto-detects all if empty
     [string]$Milestones = '1,10,20,50,100'
 )
 
