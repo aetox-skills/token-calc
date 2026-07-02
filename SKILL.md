@@ -84,7 +84,7 @@ Every AI coding tool sends the same categories of tokens. The tools differ, but 
 
 | Layer | Problem | Solution | Works on | Expected savings |
 |:--|:--|:--|:--|:--:|
-| **Conversation history** | Grows every call, most of it irrelevant | **Cap at N messages.** OpenCode: [opencode-history-trimmer](https://github.com/aetox-skills/opencode-history-trimmer) plugin. Claude Code: use `compact` or `/compact`. Codex: lower `message_limit` in config. Other ADEs: apply the same principle — keep last few exchanges. | All ADEs | ~2–5K/call (stays flat) |
+| **Conversation history** | Grows every call, most of it irrelevant | **Cap at N messages.** OpenCode: [history-trimmer](https://github.com/aetox-skills/history-trimmer) plugin. Claude Code: use `compact` or `/compact`. Codex: lower `message_limit` in config. Other ADEs: apply the same principle — keep last few exchanges. | All ADEs | ~2–5K/call (stays flat) |
 | **Command/tool output** | Noise from progress bars, install logs, passed tests | **Filter output at the CLI level.** [token-saver (RTK)](https://github.com/aetox-skills/token-saver) intercepts any bash command and strips noise before the ADE sees it — works with any tool that runs bash. | Any tool via bash | ~500–3000/call per command |
 | **Instruction files** | Bloated docs, redundant descriptions, non-English instructions | **Trim to essentials.** Only load what the agent actually needs. Translate non-English content. Cut finished-task references. | All ADEs | ~5–15K |
 | **MCP servers** | Each server injects full tool schemas into every call | **Disable unused ones.** Comment out servers that aren't needed for the current task. Activate on demand. | All ADEs with MCP | ~2–4K/server |

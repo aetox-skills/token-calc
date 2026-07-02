@@ -76,7 +76,7 @@ python token-calc.py --input-tokens 60000 --cached-input-tokens 52000 --calls 20
 
 See [SKILL.md](SKILL.md) → **Optimization Strategy** for a full table of problems → solutions, cross-platform. Cap history, filter command output, trim MCPs, slim instructions — all with expected token savings. Includes a processed-token projection: ~22K tok/call at ~77% cache hit (6.8M tok/month vs 21.6M sent).
 
-**Prescriptions link to tools that fix each problem:** [opencode-history-trimmer](https://github.com/aetox-skills/opencode-history-trimmer) for history bloat, [token-saver (RTK)](https://github.com/aetox-skills/token-saver) for noisy command output.
+**Prescriptions link to tools that fix each problem:** [history-trimmer](https://github.com/aetox-skills/history-trimmer) for history bloat, [token-saver (RTK)](https://github.com/aetox-skills/token-saver) for noisy command output.
 
 ## Philosophy
 
