@@ -62,10 +62,9 @@ Auto-detect: **OpenCode** · **ZCode** · **Claude Code** (or manual mode).
 - **Track drift**: Compare baseline across config changes
 - **Multi-tool**: Compare OpenCode vs ZCode prompt sizes
 
-## Real-world Reference
+## Optimization Guide
 
-See [SKILL.md](SKILL.md) for a complete worked example: **OpenCode Steward (post-optimization)** —  
-a ~22K system prompt with ~77% cache hit, costing ~$0.07 for 20 prompts on DeepSeek V4 Flash.
+See [SKILL.md](SKILL.md) → **Optimization Strategy** for a checklist of what to do when your prompt is too large — compress bash output, cap history, trim MCPs, slim instructions — plus a cost projection example showing ~22K tok/call at ~77% cache hit.
 
 ## Philosophy
 
