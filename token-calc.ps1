@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  Token Auditor — cost control for self-hosted API users. Project your processing costs before they surprise you.
+  Token Auditor -- cost control for self-hosted API users. Project your processing costs before they surprise you.
 
 .DESCRIPTION
   Shows the "first call shock", then projects forward across call milestones
   how many tokens you'll actually pay to process (cache miss + output).
-  Designed for anyone running their own API keys — know your burn rate before it burns.
+  Designed for anyone running their own API keys -- know your burn rate before it burns.
 
 .PARAMETER InputTokens
   Total input tokens per call.
@@ -60,28 +60,27 @@ param(
     [string]$Diff = '',
     [long]$Threshold = 0,
     [long]$ContextWindow = 200000,
-    [string]$Platform = '',  # opencode | zcode | claude — auto-detects all if empty
+    [string]$Platform = '',
     [string]$Milestones = '1,10,20,50,100'
 )
 
-# ─── Force UTF-8 output ───────────────────────────────────
+# Force UTF-8 output
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 
-# ─── Measure system prompt (multi-platform) ───────────────
+# --- Measure system prompt (multi-platform) ---
 function Measure-SystemPrompt {
     param([string]$TargetPlatform = '')
     $homeDir = $env:USERPROFILE
     $result = @{ total = 0; details = @(); platforms = @{} }
 
-    # Estimate file tokens
     function Count-Tokens($text) {
         $thai = [regex]::Matches($text, '[\u0E00-\u0E7F]').Count
         $chinese = [regex]::Matches($text, '[\u4E00-\u9FFF]').Count
         return [math]::Ceiling(($text.Length - $thai - $chinese)/4 + $thai/3 + $chinese/3)
     }
 
-    $r = $result # alias for cleaner code below
-    # ── OpenCode ──────────────────────────────────────────
+    $r = $result
+    # -- OpenCode --
     if (!$TargetPlatform -or $TargetPlatform -eq 'opencode') {
         $ocFiles = @(
             @{Path = "$homeDir\CONTEXT.md"; Name = 'CONTEXT.md'},
@@ -117,7 +116,7 @@ function Measure-SystemPrompt {
         }
     }
 
-    # ── ZCode ─────────────────────────────────────────────
+    # -- ZCode --
     if (!$TargetPlatform -or $TargetPlatform -eq 'zcode') {
         $zAgentDir = "$homeDir\.zcode\agents"
         if (Test-Path $zAgentDir) {
@@ -144,68 +143,133 @@ function Measure-SystemPrompt {
         }
     }
 
-    # ── Claude Code ───────────────────────────────────────
+    # -- Claude Code --
     if (!$TargetPlatform -or $TargetPlatform -eq 'claude') {
         $claudeFile = "$homeDir\.claude\instructions.md"
         if (Test-Path $claudeFile) { $tok = Count-Tokens (Get-Content -Raw $claudeFile); $r.total += $tok; $r.details += [PSCustomObject]@{Component = 'instructions.md'; Tokens = $tok; Platform = 'Claude'}; $r.platforms['Claude'] = $true }
     }
 
-    # ── Cross-platform estimates ──────────────────────────
-    $mcpTok = 4 * 2000  # ~2K per server, Obsidian heaviest
-    $r.total += $mcpTok; $r.details += [PSCustomObject]@{Component = "MCP tools x4"; Tokens = $mcpTok; Platform = 'common'}
+    # --- MCP Server Registry ---
+    # Token counts measured from actual tool definitions (name + description + parameter schemas)
+    $McpRegistry = @{
+        'obsidian'            = @{ tools=15; tok=1150; desc='Obsidian vault (15 tools: read/write/search/manage)' }
+        'sequential-thinking' = @{ tools=1;  tok=550;  desc='Sequential thinking (1 tool, 11 complex params)' }
+        'exa'                 = @{ tools=2;  tok=250;  desc='Exa semantic search + fetch' }
+        'context7'            = @{ tools=2;  tok=250;  desc='Context7 library docs resolve + query' }
+        'gmail'               = @{ tools=4;  tok=600;  desc='Gmail send/read/search/draft' }
+        'speak'               = @{ tools=1;  tok=100;  desc='Thai TTS speak tool' }
+        'image-resolver'      = @{ tools=2;  tok=200;  desc='Pexels/Unsplash image search' }
+        'pixabay'             = @{ tools=2;  tok=200;  desc='Pixabay media search' }
+    }
+
+    # Parse actual active MCP servers from opencode.jsonc
+    $mcpConfigPath = "$homeDir\.config\opencode\opencode.jsonc"
+    $activeServers = @()
+    if (Test-Path $mcpConfigPath) {
+        $mcpLines = Get-Content $mcpConfigPath
+        $inMcp = $false; $mcpIndent = -1; $serverIndent = -1
+        foreach ($line in $mcpLines) {
+            $indent = $line.Length - $line.TrimStart().Length
+            $trimmed = $line.Trim()
+            
+            if ($trimmed -match '"mcp"\s*:\s*\{') {
+                $inMcp = $true
+                $mcpIndent = $indent
+                $serverIndent = $indent + 2
+                continue
+            }
+            if (!$inMcp) { continue }
+            
+            # Leave mcp section when we hit a brace at mcp indent level or lower
+            if ($indent -le $mcpIndent -and $trimmed -eq '}' -and $line -notmatch '\{') {
+                $inMcp = $false; break
+            }
+            
+            # Skip comments
+            if ($trimmed -match '^//') { continue }
+            
+            # Match server names: at exactly serverIndent level
+            if ($indent -eq $serverIndent -and $trimmed -match '^"([^"]+)"\s*:\s*\{') {
+                $activeServers += $Matches[1]
+            }
+        }
+    }
+
+    # Calculate MCP tokens from real config
+    $mcpTok = 0
+    foreach ($srvName in $activeServers) {
+        $known = $McpRegistry[$srvName]
+        if ($known) {
+            $mcpTok += $known.tok
+            $r.details += [PSCustomObject]@{Component = "MCP: $srvName ($($known.tools) tools)"; Tokens = $known.tok; Platform = 'common'}
+        } else {
+            # Unknown server — rough estimate
+            $est = 300
+            $mcpTok += $est
+            $r.details += [PSCustomObject]@{Component = "MCP: $srvName [unknown, est]"; Tokens = $est; Platform = 'common'}
+        }
+    }
+    if ($activeServers.Count -gt 0) {
+        # MCP instruction blocks + list/read_resource meta tools
+        $mcpOverhead = 500
+        $mcpTok += $mcpOverhead
+        $r.details += [PSCustomObject]@{Component = "MCP: system overhead (instructions + meta)"; Tokens = $mcpOverhead; Platform = 'common'}
+    }
+    $r.total += $mcpTok
+
     $r.total += 2000; $r.details += [PSCustomObject]@{Component = 'System overhead'; Tokens = 2000; Platform = 'common'}
     $r.total += 5000; $r.details += [PSCustomObject]@{Component = 'History (capped ~10 msgs)'; Tokens = 5000; Platform = 'common'}
-
 
     $platformsList = ($r.platforms.Keys | Where-Object { $_ -ne 'common' }) -join ', '
     return @{ total = $r.total; details = $r.details; timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'); platforms = $platformsList }
 }
 
-# ─── Load previous baseline ───────────────────────────────
+# Load previous baseline
 $previous = $null
 if ($Diff -and (Test-Path $Diff)) { try { $previous = Get-Content -Raw $Diff | ConvertFrom-Json } catch {} }
 
-# ─── Auto-measure ─────────────────────────────────────────
+# Auto-measure
 $measureResult = $null
 if ($Measure) {
     $platArg = if ($Platform) { $Platform.ToLower() } else { '' }
-    Write-Host "`n📏 Measuring system prompt..." -ForegroundColor Cyan
+    Write-Host "`n[measure] Measuring system prompt..." -ForegroundColor Cyan
     $measureResult = Measure-SystemPrompt -TargetPlatform $platArg
     $InputTokens = $measureResult.total
     if ($CachedInputTokens -eq 0) { $CachedInputTokens = [long][math]::Round($measureResult.total * 0.3) }
 
     Write-Host "  Platforms detected: $($measureResult.platforms)" -ForegroundColor DarkGray
     $measureResult.details | Sort-Object Tokens -Descending | ForEach-Object {
-        Write-Host ("  {0,-40} {1,8:N0}" -f $_.Component, $_.Tokens)
+        $comp = $_.Component.PadRight(40)
+        $tok = $_.Tokens.ToString('N0').PadLeft(8)
+        Write-Host "  $comp $tok"
     }
-    Write-Host ("  " + "TOTAL system prompt".PadRight(44) + "$("{0:N0}" -f $measureResult.total) tok") -ForegroundColor Cyan
+    Write-Host "  $("TOTAL system prompt".PadRight(44))$($measureResult.total.ToString('N0')) tok" -ForegroundColor Cyan
 
     if ($Save) {
         $measureResult.details | Select-Object Component, Tokens, Platform | ConvertTo-Json | Set-Content $Save
-        Write-Host "`n💾 Baseline saved → $Save" -ForegroundColor DarkGray
+        Write-Host "`n[save] Baseline saved -> $Save" -ForegroundColor DarkGray
     }
 }
 
-# ─── Validate ─────────────────────────────────────────────
+# Validate
 if ($InputTokens -le 0 -and $OutputTokens -le 0) {
     Write-Error "Need at least some tokens. Use -Measure or -InputTokens."
     exit 1
 }
 
-# ─── Threshold guard ──────────────────────────────────────
+# Threshold guard
 if ($Threshold -gt 0 -and $InputTokens -gt $Threshold) {
-    Write-Host "`n🚨 THRESHOLD EXCEEDED!" -ForegroundColor Red -BackgroundColor Black
-    Write-Host "  Input: $("{0:N0}" -f $InputTokens) tok > Limit: $("{0:N0}" -f $Threshold) tok" -ForegroundColor Red
+    Write-Host "`n[ALERT] THRESHOLD EXCEEDED!" -ForegroundColor Red -BackgroundColor Black
+    Write-Host "  Input: $($InputTokens.ToString('N0')) tok > Limit: $($Threshold.ToString('N0')) tok" -ForegroundColor Red
     exit 2
 }
 
-# ─── Calculations ─────────────────────────────────────────
+# Calculations
 $cacheMissTokens = [math]::Max(0, $InputTokens - $CachedInputTokens)
 $totalSentPerCall = $InputTokens + $OutputTokens
 $cacheHitRate  = if ($InputTokens -gt 0) { $CachedInputTokens / $InputTokens } else { 0 }
 $cacheMissRate = 1 - $cacheHitRate
 $ctxPct = if ($ContextWindow -gt 0) { $InputTokens / $ContextWindow * 100 } else { 0 }
-$rawCumulative = $totalSentPerCall * $Calls
 $firstCallNew  = $totalSentPerCall
 $eachRepeatedNew = $cacheMissTokens + $OutputTokens
 $effectiveCumulative = $firstCallNew + ($eachRepeatedNew * ($Calls - 1))
@@ -213,111 +277,111 @@ $shockMultiplier = if ($eachRepeatedNew -gt 0) { [math]::Round($firstCallNew / $
 $perSession = $totalSentPerCall * $CallsPerSession
 $perDay     = $perSession * $SessionsPerDay
 
-# ─── Risk level ───────────────────────────────────────────
+# Risk level
 $riskColor = 'Green'; $riskLabel = 'LOW'
 if ($InputTokens -gt 20000) { $riskColor = 'Yellow'; $riskLabel = 'CAUTION' }
 if ($InputTokens -gt 50000) { $riskColor = 'Red';   $riskLabel = 'HIGH' }
 
-# ─── Recommendations ──────────────────────────────────────
+# Recommendations
 $recs = @()
 if ($Measure -and $measureResult) {
     $mcpTotal = ($measureResult.details | Where-Object { $_.Component -like 'MCP*' } | Measure-Object Tokens -Sum).Sum
     $mcpPct = if ($measureResult.total -gt 0) { $mcpTotal / $measureResult.total * 100 } else { 0 }
-    if ($mcpPct -gt 50) { $recs += "MCP tools dominate ($("{0:N0}" -f $mcpPct)%). Merge or disable unused servers." }
+    if ($mcpPct -gt 50) { $recs += "MCP tools dominate ($($mcpPct.ToString('N0'))%). Merge or disable unused servers." }
     $largest = $measureResult.details | Sort-Object Tokens -Descending | Select-Object -First 3
-    $recs += "Top 3 optimization targets by platform: $($largest[0].Component) [$($largest[0].Platform)] ($("{0:N0}" -f $largest[0].Tokens) tok), $($largest[1].Component) [$($largest[1].Platform)] ($("{0:N0}" -f $largest[1].Tokens) tok), $($largest[2].Component) [$($largest[2].Platform)] ($("{0:N0}" -f $largest[2].Tokens) tok)"
+    $recs += "Top 3 optimization targets by platform: $($largest[0].Component) [$($largest[0].Platform)] ($($largest[0].Tokens.ToString('N0')) tok), $($largest[1].Component) [$($largest[1].Platform)] ($($largest[1].Tokens.ToString('N0')) tok), $($largest[2].Component) [$($largest[2].Platform)] ($($largest[2].Tokens.ToString('N0')) tok)"
 }
 if ($cacheHitRate -lt 0.4 -and $InputTokens -gt 0) {
-    $recs += "Cache too low ($("{0:P1}" -f $cacheHitRate)). Structure prompt for reuse."
+    $recs += "Cache too low ($($cacheHitRate.ToString('P1'))). Structure prompt for reuse."
 }
 if ($InputTokens -gt 50000) {
-    $recs += "CRITICAL: Input $("{0:N0}" -f $InputTokens) tok eats $("{0:N0}" -f $ctxPct)% of $("{0:N0}" -f $ContextWindow) context window."
+    $recs += "CRITICAL: Input $($InputTokens.ToString('N0')) tok eats $($ctxPct.ToString('N0'))% of $($ContextWindow.ToString('N0')) context window."
 }
 if ($OutputTokens -eq 0) { $recs += "Add -OutputTokens for complete per-call picture (model response)." }
 if ($Threshold -eq 0) { $recs += "Set -Threshold <tok> to guard against surprises in CI/scripts." }
 
-# ─── Diff ─────────────────────────────────────────────────
+# Diff
 $diffs = @()
 if ($previous -and $measureResult) {
     $prevTotal = ($previous | Measure-Object Tokens -Sum).Sum
     $diffTok = $measureResult.total - $prevTotal
     $pct = if ($prevTotal -gt 0) { [math]::Round($diffTok / $prevTotal * 100, 1) } else { 0 }
-    $arrow = if ($diffTok -ge 0) { "↑" } else { "↓" }
-    $diffs += "Overall: $arrow $("{0:N0}" -f [math]::Abs($diffTok)) tok ($pct%)"
+    $arrow = if ($diffTok -ge 0) { "+" } else { "-" }
+    $diffs += "Overall: $arrow $([math]::Abs($diffTok).ToString('N0')) tok ($pct%)"
     $compMap = @{}; $previous | ForEach-Object { $compMap[$_.Component] = $_.Tokens }
     foreach ($d in $measureResult.details) {
         $old = if ($compMap.ContainsKey($d.Component)) { $compMap[$d.Component] } else { 0 }
         if ($old -ne $d.Tokens) {
-            $dArrow = if ($d.Tokens -ge $old) { "↑" } else { "↓" }
-            $diffs += "$($d.Component): $dArrow $("{0:N0}" -f [math]::Abs($d.Tokens - $old)) tok"
+            $dArrow = if ($d.Tokens -ge $old) { "+" } else { "-" }
+            $diffs += "$($d.Component): $dArrow $([math]::Abs($d.Tokens - $old).ToString('N0')) tok"
         }
     }
 }
 
-# ══════════════════════════════════════════════════════════
+# ============================================================
 # DISPLAY
-# ══════════════════════════════════════════════════════════
-function Line { Write-Host ("─" * 60) -ForegroundColor DarkGray }
+# ============================================================
+function Write-Line { Write-Host ("-" * 60) -ForegroundColor DarkGray }
 
-# ─── HEADER WITH RISK ─────────────────────────────────────
-Line
-Write-Host "  TOKEN AUDITOR  ●  RISK: $riskLabel" -ForegroundColor $riskColor
-Line
+# Header with risk
+Write-Line
+Write-Host "  TOKEN AUDITOR  *  RISK: $riskLabel" -ForegroundColor $riskColor
+Write-Line
 
-# ─── FIRST CALL SHOCK ─────────────────────────────────────
+# First call shock
 if ($Calls -gt 1) {
-    Write-Host "`n⚠️  FIRST CALL SHOCK" -ForegroundColor $riskColor
-    Write-Host "  Opening this session costs you $("{0:N0}" -f $firstCallNew) tok before you type." -ForegroundColor $riskColor
-    Write-Host "  That's $("{0:N0}" -f $ctxPct)% of your $("{0:N0}" -f $ContextWindow) context window." -ForegroundColor $riskColor
-    Write-Host "  Each subsequent call costs only $("{0:N0}" -f $eachRepeatedNew) tok (cache kicks in)."
-    Write-Host "  First call = $shockMultiplier× the cost of a repeated call." -ForegroundColor $riskColor
+    Write-Host "`n[!] FIRST CALL SHOCK" -ForegroundColor $riskColor
+    Write-Host "  Opening this session costs you $($firstCallNew.ToString('N0')) tok before you type." -ForegroundColor $riskColor
+    Write-Host "  That's $($ctxPct.ToString('N0'))% of your $($ContextWindow.ToString('N0')) context window." -ForegroundColor $riskColor
+    Write-Host "  Each subsequent call costs only $($eachRepeatedNew.ToString('N0')) tok (cache kicks in)."
+    Write-Host "  First call = $shockMultiplier`x the cost of a repeated call." -ForegroundColor $riskColor
 }
 
-# ─── BREAKDOWN ────────────────────────────────────────────
-Write-Host "`n📊 TOKEN BREAKDOWN (per call)" -ForegroundColor Yellow
-Write-Host ("  {0,-30} {1,12}" -f "Input Sent", ("{0:N0}" -f $InputTokens))
-Write-Host ("  {0,-30} {1,12}" -f "  ↳ Cache Hit (reused)", ("{0:N0}" -f $CachedInputTokens))
-Write-Host ("  {0,-30} {1,12}" -f "  ↳ Cache Miss (fresh)", ("{0:N0}" -f $cacheMissTokens))
+# Breakdown
+Write-Host "`n[chart] TOKEN BREAKDOWN (per call)" -ForegroundColor Yellow
+Write-Host ("  " + "Input Sent".PadRight(30) + " " + $InputTokens.ToString('N0').PadLeft(12))
+Write-Host ("  " + "  --> Cache Hit (reused)".PadRight(30) + " " + $CachedInputTokens.ToString('N0').PadLeft(12))
+Write-Host ("  " + "  --> Cache Miss (fresh)".PadRight(30) + " " + $cacheMissTokens.ToString('N0').PadLeft(12))
 if ($OutputTokens -gt 0) {
-    Write-Host ("  {0,-30} {1,12}" -f "Output Received", ("{0:N0}" -f $OutputTokens))
+    Write-Host ("  " + "Output Received".PadRight(30) + " " + $OutputTokens.ToString('N0').PadLeft(12))
 }
-Write-Host ("  {0,-30} {1,12}" -f "Total Sent/Received", ("{0:N0}" -f $totalSentPerCall)) -ForegroundColor Cyan
-Write-Host ("  {0,-30} {1,12}" -f "Context Window Used", "$("{0:N0}" -f $ctxPct)%")
+Write-Host ("  " + "Total Sent/Received".PadRight(30) + " " + $totalSentPerCall.ToString('N0').PadLeft(12)) -ForegroundColor Cyan
+Write-Host ("  " + "Context Window Used".PadRight(30) + " " + ($ctxPct.ToString('N0') + "%").PadLeft(12))
 
-# ─── CACHE ────────────────────────────────────────────────
-Write-Host "`n📈 CACHE EFFICIENCY" -ForegroundColor Yellow
-Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Hit Rate", $cacheHitRate)
-Write-Host ("  {0,-33} {1,12:P1}" -f "Cache Miss Rate", $cacheMissRate)
-Write-Host ("  {0,-33} {1,12:N0}" -f "Reused per Call", $CachedInputTokens)
+# Cache
+Write-Host "`n[chart] CACHE EFFICIENCY" -ForegroundColor Yellow
+Write-Host ("  " + "Cache Hit Rate".PadRight(33) + " " + $cacheHitRate.ToString('P1').PadLeft(12))
+Write-Host ("  " + "Cache Miss Rate".PadRight(33) + " " + $cacheMissRate.ToString('P1').PadLeft(12))
+Write-Host ("  " + "Reused per Call".PadRight(33) + " " + $CachedInputTokens.ToString('N0').PadLeft(12))
 
-# ─── PROCESSING PROJECTOR ─────────────────────────────────
+# Processing projector
 $mslist = $Milestones -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -match '^\d+$' } | ForEach-Object { [long]$_ } | Where-Object { $_ -le $Calls }
 if ($mslist.Count -gt 1) {
-    Write-Host "`n🔄 PROCESSING PROJECTOR" -ForegroundColor Yellow
+    Write-Host "`n[loop] PROCESSING PROJECTOR" -ForegroundColor Yellow
     Write-Host "  What you'll actually pay to process at each stage:" -ForegroundColor DarkGray
-    Write-Host ("  {0,8}  {1,14}  {2,14}" -f "Calls", "Total Sent", "Processed (pay)")
-    Write-Host ("  {0,8}  {1,14}  {2,14}" -f ("─" * 5), ("─" * 12), ("─" * 14))
+    Write-Host ("  " + "Calls".PadRight(8) + "  " + "Total Sent".PadLeft(14) + "  " + "Processed (pay)".PadLeft(14))
+    Write-Host ("  " + ("-" * 5).PadRight(8) + "  " + ("-" * 12).PadLeft(14) + "  " + ("-" * 14).PadLeft(14))
     foreach ($m in $mslist) {
         $msent = $totalSentPerCall * $m
         $mproc = $firstCallNew + ($eachRepeatedNew * ($m - 1))
         $mColor = if ($m -eq 1) { $riskColor } else { 'Gray' }
-        Write-Host ("  {0,6}  {1,14:N0}  {2,14:N0}" -f $m, $msent, $mproc) -ForegroundColor $mColor
+        Write-Host ("  " + $m.ToString().PadRight(6) + "  " + $msent.ToString('N0').PadLeft(14) + "  " + $mproc.ToString('N0').PadLeft(14)) -ForegroundColor $mColor
     }
     Write-Host ("  Note: 'Processed (pay)' = first call full + repeated fresh-only (cache miss + output)") -ForegroundColor DarkGray
 }
 
-# ─── RECOMMENDATIONS ──────────────────────────────────────
+# Recommendations
 if ($recs.Count -gt 0) {
-    Write-Host "`n💡 RECOMMENDATIONS" -ForegroundColor Green
-    foreach ($r in $recs) { Write-Host "  • $r" }
+    Write-Host "`n[tip] RECOMMENDATIONS" -ForegroundColor Green
+    foreach ($r in $recs) { Write-Host "  * $r" }
 }
 
-# ─── DIFF ─────────────────────────────────────────────────
+# Diff display
 if ($diffs.Count -gt 0) {
-    Write-Host "`n📉 DIFF vs BASELINE" -ForegroundColor Cyan
-    foreach ($d in $diffs) { Write-Host "  • $d" }
+    Write-Host "`n[down] DIFF vs BASELINE" -ForegroundColor Cyan
+    foreach ($d in $diffs) { Write-Host "  * $d" }
 }
 
-Line
+Write-Line
 Write-Host "  Token counts are approximate. Use exact tokenizer for billing." -ForegroundColor DarkGray
 Write-Host

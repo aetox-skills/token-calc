@@ -1,0 +1,97 @@
+[
+  {
+    "component": "CONTEXT.md",
+    "tokens": 1145,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "PROFILE.md",
+    "tokens": 487,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "AGENTS.md",
+    "tokens": 1,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "designer (agent)",
+    "tokens": 19,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "minecrafter (agent)",
+    "tokens": 17,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "optimizer (agent)",
+    "tokens": 19,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "scribe (agent)",
+    "tokens": 19,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "steward (agent)",
+    "tokens": 14,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "context7-mcp (skill)",
+    "tokens": 63,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "github (skill)",
+    "tokens": 54,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "token-calc (skill)",
+    "tokens": 71,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "token-saver (skill)",
+    "tokens": 71,
+    "platform": "OpenCode"
+  },
+  {
+    "component": "MCP: sequential-thinking (1 tools)",
+    "tokens": 550,
+    "platform": "common"
+  },
+  {
+    "component": "MCP: obsidian (15 tools)",
+    "tokens": 1150,
+    "platform": "common"
+  },
+  {
+    "component": "MCP: exa (2 tools)",
+    "tokens": 250,
+    "platform": "common"
+  },
+  {
+    "component": "MCP: context7 (2 tools)",
+    "tokens": 250,
+    "platform": "common"
+  },
+  {
+    "component": "MCP: system overhead (instructions + meta)",
+    "tokens": 500,
+    "platform": "common"
+  },
+  {
+    "component": "System overhead",
+    "tokens": 2000,
+    "platform": "common"
+  },
+  {
+    "component": "History (capped ~10 msgs)",
+    "tokens": 5000,
+    "platform": "common"
+  }
+]

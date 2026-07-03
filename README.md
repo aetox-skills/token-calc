@@ -1,126 +1,145 @@
 # Token Auditor
 
-<<<<<<< HEAD
-**Measure your system prompt. Identify waste. Get prescriptions.**
+> **รู้ก่อนเสีย — วัด token consumption จริงของ AI coding tools ก่อน deploy**
 
-Your API calls cost more than they should. You just don't know how much — yet.
-
-Every AI coding tool sends a system prompt with every call. Add an MCP server? Permanent +3K tok. Chat for 20 messages? History eats 100K+. Cache is 120× cheaper than a miss, but most people never check their hit rate.
-
-We fix that. **Measure → Diagnose → Prescribe.** Platform-agnostic: OpenCode, ZCode, Claude Code, Codex, Cursor — any ADE that calls an API.
-=======
-**ควบคุมค่าใช้จ่าย AI API สำหรับ self-hosted — รองรับหลายแพลตฟอร์ม**
-
-ตรวจจับอัตโนมัติ: **OpenCode** · **ZCode** · **Claude Code** (หรือระบุเองได้)
->>>>>>> f986abb (Thai README: แปล README ทั้งหมดเป็นภาษาไทย)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-OpenCode%20|%20ZCode%20|%20Claude%20Code-orange)](#)
+[![Python](https://img.shields.io/badge/Python-3.8+-brightgreen)](#)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7+-blue)](#)
 
 ---
 
-## เริ่มต้น
+```text
+📏 Measuring system prompt...
+  Platforms detected: OpenCode, ZCode
+  TOTAL system prompt                            12,012 tok
+  
+⚠️  FIRST CALL SHOCK
+  Opening this session costs you 14,012 tok before you type.
+  
+📊 TOKEN BREAKDOWN (per call)
+  Input Sent                              12,012
+    ↳ Cache Hit (reused)                   3,604
+    ↳ Cache Miss (fresh)                   8,408
+  Output Received                          2,000
 
-<<<<<<< HEAD
-**Python (cross-platform — Windows / macOS / Linux):**
-```bash
-python token-calc.py --measure --calls 100 --output-tokens 2000
-python token-calc.py --input-tokens 60000 --cached-input-tokens 52000 --calls 200
+📈 CACHE EFFICIENCY
+  Cache Hit Rate                    30.0%
+  
+🔄 100 calls → 1,044,404 tok processed (not 1,401,200 sent)
+💡 Top optimization: History (5,000 tok), MCP tools (2,700 tok)
 ```
 
-**PowerShell (Windows):**
-```powershell
-.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
-=======
-```powershell
-# Auto-detect + คำนวณครบ
-.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
+**ตรวจจับ system prompt ของคุณ จริง จากไฟล์ config จริง**  
+แล้วบอกว่าแต่ละ session เผาผลาญ tokens เท่าไหร่ — แยกตาม cache hit/miss, projection ถึง 100 calls, และแนะนำว่าควร optimize ตรงไหน
 
-# หรือระบุเอง
->>>>>>> f986abb (Thai README: แปล README ทั้งหมดเป็นภาษาไทย)
+---
+
+## Features
+
+| | | |
+|:--|:--|:--|
+| 🔍 | **Auto-detect** | อ่าน system prompt จาก OpenCode, ZCode, Claude Code โดยตรง |
+| 💰 | **First Call Shock** | รู้ว่าเปิด session แต่ละครั้งเสีย tokens เท่าไหร่ก่อนพิมพ์ |
+| 📊 | **Token Breakdown** | แยก input = cache hit + cache miss + output |
+| 📈 | **Cache Efficiency** | Hit rate, miss rate, tokens ที่ประหยัดได้จริง |
+| 🔮 | **Processing Projector** | 1 → 10 → 20 → 50 → 100 calls จะเสียเท่าไหร่ |
+| 💡 | **Recommendations** | แนะนำสิ่งที่ควร optimize แยกตาม platform |
+| 🚨 | **Threshold Guard** | ตั้ง alert ถ้า system prompt เกิน limit (`exit 2`) |
+| 📉 | **Baseline Tracking** | `--save` + `--diff` เปรียบเทียบเมื่อเปลี่ยน config |
+| 🔄 | **Multi-model** | วัด AI coding tool ได้ทีเดียว — เทียบ prompt size |
+
+---
+
+## Quick Start
+
+### Python (cross-platform)
+
+```bash
+# Auto-detect + projection 100 calls
+python token-calc.py --measure --calls 100 --output-tokens 2000
+
+# Custom input
+python token-calc.py --input-tokens 60000 --cached-input-tokens 52000 --calls 200
+
+# Threshold guard (exit 2 if exceeded)
+python token-calc.py --measure --threshold 50000
+```
+
+### PowerShell (Windows)
+
+```powershell
+.\token-calc.ps1 -Measure -Calls 100 -OutputTokens 2000
 .\token-calc.ps1 -InputTokens 60000 -CachedInputTokens 52000 -OutputTokens 4000 -Calls 100
 ```
 
-## สิ่งที่คุณได้
+---
 
-| หัวข้อ | คำอธิบาย |
-|:--|:--|
-| **⚠️ FIRST CALL SHOCK** | Tokens ที่เสียก่อนพิมพ์อะไรเลย |
-| **📊 TOKEN BREAKDOWN** | Input = cache hit + cache miss, + output |
-| **📈 CACHE EFFICIENCY** | Hit rate, miss rate, tokens ที่ประหยัดได้ |
-| **🔄 PROCESSING PROJECTOR** | ตาราง: 1 → 10 → 20 → 50 → 100 calls |
-| **💡 RECOMMENDATIONS** | ว่าควร optimize อะไร (แยกตาม platform) |
-| **🚨 Threshold Guard** | `-Threshold 50000` เตือนก่อน deploy (exit 2) |
+## Use Cases
 
-## มีอะไรใหม่ใน v2
+### 🎯 รู้ต้นทุนจริงต่อ session
 
-| ฟีเจอร์ | รายละเอียด |
-|:--|:--|
-| **Multi-platform** | ตรวจจับ OpenCode, ZCode, Claude Code อัตโนมัติ |
-| **`-Platform`** | กรองเฉพาะ: `opencode`, `zcode`, `claude` |
-| **`-Milestones`** | กำหนดขั้น projection เอง: `"1,5,25,100,500"` |
-| **`-ContextWindow`** | ตั้งขนาด context window ของ model (default 200K) |
+```bash
+python token-calc.py --measure --calls 50
+```
+→ "50 calls = 524K processed tokens, cache hit 30% → ลดได้อีก"
 
-## พารามิเตอร์
+### 🚧 CI Guard
 
-| Param | Default | คำอธิบาย |
+```bash
+python token-calc.py --measure --threshold 50000
+if ($LASTEXITCODE -eq 2) { throw "System prompt too large!" }
+```
+→ Deploy ล้มเหลวถ้า system prompt > 50K tok
+
+### 📉 ติดตาม trend
+
+```bash
+python token-calc.py --measure --save baseline.json
+# ... แก้ config ...
+python token-calc.py --measure --diff baseline.json
+```
+→ "Cache hit rate ลดลงจาก 45% → 30% — MCP ตัวใหม่อาจเป็นปัญหา"
+
+---
+
+## All Parameters
+
+| Flag | Default | Description |
 |:--|:--|:--|
-| `-InputTokens` | 0 | Input tokens ทั้งหมดต่อ 1 call |
-| `-CachedInputTokens` | 0 | ส่วนที่เป็น cache hit |
-| `-OutputTokens` | 0 | Output tokens |
-| `-Measure` | off | ตรวจจับ system prompt อัตโนมัติ |
-| `-Platform` | auto | `opencode` / `zcode` / `claude` |
-| `-Calls` | 1 | จำนวน calls ที่จะ projection |
-| `-CallsPerSession` | 10 | จำนวน calls ต่อ session |
-| `-SessionsPerDay` | 3 | จำนวน sessions ต่อวัน |
-| `-Milestones` | 1,10,20,50,100 | ขั้นในตาราง projection |
-| `-Threshold` | 0 | ถ้าเกินให้ exit ด้วย error |
-| `-ContextWindow` | 200000 | ขนาด context window ของ model |
-| `-Save` | '' | บันทึก baseline เป็น JSON |
-| `-Diff` | '' | เปรียบเทียบกับ baseline JSON |
+| `--measure` | off | Auto-detect system prompt ของ AI coding tools |
+| `--platform` | auto | `opencode` / `zcode` / `claude` |
+| `--input-tokens` | 0 | Input tokens ต่อ call |
+| `--cached-input-tokens` | 0 | ส่วนที่เป็น cache hit |
+| `--output-tokens` | 0 | Output tokens ต่อ call |
+| `--calls` | 1 | จำนวน calls ที่ projection |
+| `--milestones` | 1,10,20,50,100 | ขั้น projection custom |
+| `--threshold` | 0 | Alert threshold (exit code 1/2) |
+| `--save` | — | บันทึก baseline เป็น JSON |
+| `--diff` | — | เทียบกับ baseline JSON |
+| `--context-window` | 200000 | Context window ของ model |
+| `--no-details` | — | แสดงแค่ summary |
 
-## กรณีการใช้งาน
+---
 
-- **รู้อัตราการเผาผลาญ**: "100 calls = 1.25M processed, ไม่ใช่ 6.4M sent"
-- **วางแผนก่อนเพิ่มอะไร**: "เพิ่ม MCP server ต้นทุน 3K tok/call"
-- **CI guard**: "Deploy ล้มเหลวถ้า system prompt > 50K"
-- **ติดตามการเปลี่ยนแปลง**: เปรียบเทียบ baseline เมื่อเปลี่ยน config
-- **Multi-tool**: เปรียบเทียบขนาด prompt ระหว่าง OpenCode vs ZCode
+## Philosophy
 
-<<<<<<< HEAD
-## Optimization Guide
+**Token-only.** ไม่มีราคา, ไม่มี model pricing, ไม่มีสกุลเงิน — วัดแค่ tokens  
+เพราะ token consumption คือ metric ที่ stable ที่สุดสำหรับ AI agent ops
 
-> Read this after you've measured. Don't guess what to fix — let the numbers tell you.
+คุณจัดการ cost เอง — Token Auditor ทำให้คุณรู้ก่อนว่าเท่าไหร่
 
-See [SKILL.md](SKILL.md) → **Optimization Strategy** for a full table of problems → solutions, cross-platform. Cap history, filter command output, trim MCPs, slim instructions — all with expected token savings. Includes a processed-token projection: ~22K tok/call at ~77% cache hit (6.8M tok/month vs 21.6M sent).
+---
 
-**Prescriptions link to tools that fix each problem:** [history-trimmer](https://github.com/aetox-skills/history-trimmer) for history bloat, [token-saver (RTK)](https://github.com/aetox-skills/token-saver) for noisy command output.
-=======
-## ตัวอย่างจริง
+## Examples
 
-ดู [SKILL.md](SKILL.md) สำหรับตัวอย่างสมบูรณ์: **OpenCode Steward (หลัง optimization)** —  
-system prompt ~22K, cache hit ~77%, ต้นทุน ~$0.07 สำหรับ 20 prompts บน DeepSeek V4 Flash
->>>>>>> f986abb (Thai README: แปล README ทั้งหมดเป็นภาษาไทย)
+- **OpenCode Steward** → system prompt ~22K, cache ~77%, $0.07/20 prompts (DeepSeek V4 Flash)
+- **ZCode backend-py** → system prompt ~18K, cache ~65%
+- **Claude Code** → system prompt ~40K, cache ~50%
 
-## ปรัชญา
+ดูรายละเอียดใน [SKILL.md](SKILL.md)
 
-<<<<<<< HEAD
-### Tokens only
-We measure what leaves your machine — cache hit, cache miss, output, processed totals. **No pricing, no model, no money.** Prices change, models change, but token waste is universal.
-
-> If you have a pricing lookup skill, use it alongside this one. If not, the token counts are all you need — cutting waste saves money regardless of rate.
-
-### Measure before you optimize
-Don't guess what to cut. Run the script first. The numbers tell you where the waste is — instructions, MCPs, history, skills. **The goal isn't a smaller number. The goal is knowing where your tokens go so you can decide what's worth it.**
-
-### "Sent" ≠ "Processed"
-What you send to the API is not what you pay for. Cache reuse means the first call carries the full system prompt; every call after that only pays for fresh input. **The gap between "sent" and "processed" is where optimization lives.**
-
-### Cross-platform by design
-This works on any AI coding tool that calls an API — OpenCode, Claude Code, Codex, Cursor, ZCode, Gemini CLI. The problems are the same: bloat is universal, and so are the solutions. **We don't care which tool you use. We care about what you send.**
-
-### Diagnose → Prescribe
-This is not a calculator. A calculator tells you a number. We tell you what's eating tokens, how much each layer costs, and where to look for savings. **We exist because waste is invisible until someone measures it.**
-=======
-**Token-only.** ไม่มีราคา, ไม่มี model, ไม่มีเงิน — วัดแค่ tokens คุณจัดการ cost เอง ทำให้ maintainable โดยไม่ต้องตามราคาที่เปลี่ยนตลอด
->>>>>>> f986abb (Thai README: แปล README ทั้งหมดเป็นภาษาไทย)
+---
 
 ## License
 

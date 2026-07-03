@@ -20,6 +20,22 @@ import re
 import sys
 from pathlib import Path
 
+# ─── UTF-8 output for Windows (emoji/unicode display) ────
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+# ─── MCP Server Registry ─────────────────────────────────────
+# Token counts measured from actual tool definitions (name + description + parameter schemas)
+MCP_REGISTRY = {
+    'obsidian':            {'tools': 15, 'tok': 1150, 'desc': 'Obsidian vault (15 tools: read/write/search/manage)'},
+    'sequential-thinking': {'tools': 1,  'tok': 550,  'desc': 'Sequential thinking (1 tool, 11 complex params)'},
+    'exa':                 {'tools': 2,  'tok': 250,  'desc': 'Exa semantic search + fetch'},
+    'context7':            {'tools': 2,  'tok': 250,  'desc': 'Context7 library docs resolve + query'},
+    'gmail':               {'tools': 4,  'tok': 600,  'desc': 'Gmail send/read/search/draft'},
+    'speak':               {'tools': 1,  'tok': 100,  'desc': 'Thai TTS speak tool'},
+    'image-resolver':      {'tools': 2,  'tok': 200,  'desc': 'Pexels/Unsplash image search'},
+    'pixabay':             {'tools': 2,  'tok': 200,  'desc': 'Pixabay media search'},
+}
 
 # ─── Helpers ────────────────────────────────────────────────
 
@@ -157,6 +173,84 @@ def measure_claude(home: Path) -> tuple[int, list, bool]:
         found = True
 
     return total, details, found
+
+
+def measure_mcp_opencode(home: Path, platform: str = "common") -> tuple[int, list]:
+    """Measure MCP server tokens from actual opencode.jsonc config."""
+    total = 0
+    details = []
+
+    config_path = home / ".config" / "opencode" / "opencode.jsonc"
+    if not config_path.exists():
+        return total, details
+
+    # Parse active MCP servers from JSONC config (JSON with // comments)
+    active_servers = []
+    with open(config_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_mcp = False
+    mcp_indent = -1
+    server_indent = -1
+
+    for line in lines:
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+
+        if '"mcp"' in stripped and ':' in stripped and '{' in stripped:
+            in_mcp = True
+            mcp_indent = indent
+            server_indent = indent + 2
+            continue
+
+        if not in_mcp:
+            continue
+
+        # Leave mcp section when we hit a closing brace at mcp indent level or lower
+        if indent <= mcp_indent and stripped == '}' and '{' not in stripped:
+            in_mcp = False
+            break
+
+        # Skip comments
+        if stripped.startswith('//'):
+            continue
+
+        # Match server names at server indent level: "name": {
+        m = re.match(r'^"([^"]+)"\s*:\s*\{', stripped)
+        if m and indent == server_indent:
+            active_servers.append(m.group(1))
+
+    # Calculate tokens from registry
+    for srv_name in active_servers:
+        known = MCP_REGISTRY.get(srv_name)
+        if known:
+            total += known['tok']
+            details.append({
+                "component": f"MCP: {srv_name} ({known['tools']} tools)",
+                "tokens": known['tok'],
+                "platform": platform,
+            })
+        else:
+            # Unknown server — rough estimate from name + typical overhead
+            est = 300
+            total += est
+            details.append({
+                "component": f"MCP: {srv_name} [unknown, est]",
+                "tokens": est,
+                "platform": platform,
+            })
+
+    if active_servers:
+        # MCP instruction blocks + list/read_resource meta tools
+        mcp_overhead = 500
+        total += mcp_overhead
+        details.append({
+            "component": "MCP: system overhead (instructions + meta)",
+            "tokens": mcp_overhead,
+            "platform": platform,
+        })
+
+    return total, details
 
 
 # ─── Display ────────────────────────────────────────────────
@@ -310,16 +404,16 @@ def main():
             if found:
                 platforms_detected.append("Claude")
 
-        # Cross-platform estimates (always included)
-        mcp_tok = 4 * 2000
+        # MCP servers — read from actual OpenCode config
+        mcp_tok, mcp_details = measure_mcp_opencode(home)
         total += mcp_tok
-        all_details.append({"component": "MCP tools x4", "tokens": mcp_tok, "platform": "common"})
+        all_details.extend(mcp_details)
 
         total += 2000  # system overhead
         all_details.append({"component": "System overhead", "tokens": 2000, "platform": "common"})
 
-    total += 5000  # history cap estimate (~10 msgs)
-    all_details.append({"component": "History (capped ~10 msgs)", "tokens": 5000, "platform": "common"})
+        total += 5000  # history cap estimate (~10 msgs)
+        all_details.append({"component": "History (capped ~10 msgs)", "tokens": 5000, "platform": "common"})
 
         args.input_tokens = total
         if args.cached_input_tokens == 0:

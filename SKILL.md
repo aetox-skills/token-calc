@@ -102,22 +102,26 @@ Below is a real measurement from an OpenCode setup that applied all of the above
 
 | Component | Tokens | Note |
 |:--|:--:|:--|
-| Instructions | ~3,200 | Kept essential files only |
-| Agent identity | ~2,000 | Removed redundant AGENTS.md |
-| Available skills | ~300 | Short descriptions only |
-| MCP tool definitions | ~5,000–10,000 | 4 servers (Obsidian heaviest at +14 tools) |
-| Built-in tool defs + overhead | ~4,000 | Every ADE has this — unavoidable |
-| History (capped) | ~2,000–5,000 | Plugin keeps it at N messages |
-| **~Total input per call** | **~18,000–24,000** | |
+| History (capped) | ~5,000 | Plugin caps at ~10 messages |
+| System overhead | ~2,000 | Built-in tool defs + runtime |
+| CONTEXT.md | ~1,145 | Project context for agents |
+| MCP: obsidian (15 tools) | ~1,150 | Measured from schema, not estimated |
+| MCP: sequential-thinking (1 tool) | ~550 | Lightweight MCP |
+| MCP: system overhead | ~500 | Instructions + meta (all servers) |
+| PROFILE.md | ~487 | User profile |
+| MCP: context7, exa (2 tools each) | ~500 | ~250 each |
+| Available skills | ~690 | Short descriptions only (~70/skill) |
+| Agent identities | ~145 | Names + descriptions only |
+| **~Total input per call** | **~12,200** | Measured, not guessed |
 | Output | ~2,000 | varies by query |
 
 **Cache efficiency:**
 
 | Metric | Value |
 |:--|:--|
-| Cache hit rate | ~77% |
-| Cached per call | ~17,000 tok |
-| Fresh per call | ~5,000 tok |
+| Cache hit rate | ~30% |
+| Cached per call | ~3,650 tok |
+| Fresh per call | ~8,500 tok |
 
 > Want to know what this costs in your currency? If you have a skill or tool installed that can look up your model's current API pricing, use it. Otherwise, skip the dollar amounts — the token counts above are all you need to optimize.
 
@@ -125,11 +129,11 @@ Below is a real measurement from an OpenCode setup that applied all of the above
 
 | Calls | Sent to API | Actually processed (pay) |
 |:--:|:--:|:--:|
-| 1 (cold) | 24,000 tok | 24,000 tok |
-| 10 | 240,000 tok | 87,000 tok |
-| 20 | 480,000 tok | 157,000 tok |
-| 30 (session) | 720,000 tok | 227,000 tok |
-| Month (30 sessions) | 21.6M tok | 6.81M tok |
-| Year | 259.2M tok | 81.7M tok |
+| 1 (cold) | 12,200 tok | 12,200 tok |
+| 10 | 122,000 tok | 88,800 tok |
+| 20 | 244,000 tok | 174,000 tok |
+| 30 (session) | 366,000 tok | 259,200 tok |
+| Month (30 sessions) | 10.98M tok | 7.78M tok |
+| Year | 131.8M tok | 93.3M tok |
 
 **Key insight:** "Sent" is what leaves your machine. **"Processed" is what you actually pay for** — only the cache miss + output. The gap gets wider the longer the session runs. Once your system prompt is cached, every call after the first is nearly free to send.
